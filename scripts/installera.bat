@@ -1,5 +1,5 @@
 @echo off
-rem Installerar R-744 på Windows. Dubbelklicka på filen.
+rem Installerar STALLVERKET på Windows. Dubbelklicka på filen.
 rem Plugin-mappen för VST3 kräver administratör, så filen ber om det själv.
 
 net session >nul 2>&1
@@ -11,8 +11,8 @@ if errorlevel 1 (
 cd /d "%~dp0"
 set "DEST=%CommonProgramFiles%\VST3"
 if not exist "%DEST%" mkdir "%DEST%"
-if exist "%DEST%\R-744.vst3" rmdir /s /q "%DEST%\R-744.vst3"
-xcopy "R-744.vst3" "%DEST%\R-744.vst3\" /e /i /y /q >nul
+if exist "%DEST%\STALLVERKET.vst3" rmdir /s /q "%DEST%\STALLVERKET.vst3"
+xcopy "STALLVERKET.vst3" "%DEST%\STALLVERKET.vst3\" /e /i /y /q >nul
 
 if errorlevel 1 (
   echo.
@@ -22,7 +22,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo Klart! R-744 ligger nu i:
+echo Klart! STALLVERKET ligger nu i:
 echo   %DEST%
 echo Starta om din DAW, eller kor en ny plugin-sokning.
 echo.

@@ -1,55 +1,59 @@
-# R-744 · KLANGMASKIN
+# MASKINHALLEN : STÄLLVERKET
 
-Loopar blir ton. R-744 laddar en loop, eller en hel mapp med loopar, och förvandlar den till ackord, mattor och drönare, i tonart och i takt med Bitwig. VST3 och AU för macOS, VST3 för Windows. Ett plugin från **MASKINHALLEN** / Phunkshunz AUDIO.
+**Phunkshunz AUDIO** · mottagare + motor. Alla kanaler kopplas in i ställverket, och motorn bygger en låt av allt som strömmar igenom: intro, groove, break, uppbyggnad, drop och klimax, i takt med din DAW. VST3 + AU (Mac), VST3 (Windows), VST3 + LV2 (Linux).
 
 ## Ladda ner
 
-- Mac: https://github.com/phunkshunz/R744-VSTi/releases/latest/download/R744-macOS.zip
-- Windows: https://github.com/phunkshunz/R744-VSTi/releases/latest/download/R744-Windows.zip
+- Mac: https://github.com/phunkshunz/R744-VSTi/releases/latest/download/STALLVERKET-macOS.zip
+- Windows: https://github.com/phunkshunz/R744-VSTi/releases/latest/download/STALLVERKET-Windows.zip
+- Linux: https://github.com/phunkshunz/R744-VSTi/releases/latest/download/STALLVERKET-Linux.zip
 
-Ladda inte ner via den gröna knappen **Code**. Den ger bara källkoden.
+Mac: packa upp och kör `bash installera.command` i Terminal. Windows: dubbelklicka `installera.bat`.
 
-**Mac:** dubbelklicka på zip-filen och kör sedan i Terminal: `bash ~/Downloads/R-744/installera.command`
-**Windows:** extrahera zip-filen och dubbelklicka på **installera.bat**.
+## Så kopplar du in det (Bitwig)
 
-R-744 ligger bland instrumenten. Den ersätter gamla R-744 (samma plugin-ID).
+1. **Inställningar > Plug-ins > Plug-in hosting mode: "Together" eller "By manufacturer".** Alla STÄLLVERKET måste ligga i samma process för att prata med varandra.
+2. Lägg STÄLLVERKET **sist på varje kanal** som ska vara med i låten (kick, bas, hats, synt ...).
+3. Den första du lägger in blir **CENTRAL** av sig själv, de andra tar nästa lediga **KANAL** (1-8). En CENTRAL per projekt.
+4. Välj **ROLL** på varje kanal: KICK, BAS, HATS, PERC, SYNT, ATMO, FX, LOOP (eller ORÖRD = går rakt igenom).
+5. Låt dina klipp/mönster loopa och tryck play. Motorn tar över: tar bort och lägger till element, filtrerar, rullar trummor och bygger upp till droppen.
 
-## Kom igång
+CENTRAL behandlar också ljudet på sin egen kanal, så den kan ligga på t.ex. kicken. Vill du ha den på mastern: välj ROLL = ORÖRD.
 
-1. **Släpp en loop eller en hel mapp** på fönstret (eller LADDA LOOP / LADDA MAPP).
-2. Tryck **play i Bitwig**. Loopen spelar i takt.
-3. Tryck **SLUMPA LOOP** för att byta loop, **IDÉ!** för att byta klang. Om och om igen.
+## CENTRAL
 
-## Mappen: byt snabbt och lek
+- **MALL**: hur låten byggs. KLASSISK, MINIMAL, PEAK, HYPNOS, DOCKLANDS, STÖK, DUB, BERG-O-DAL. Varje mall har egna längder, sannolikheter och övergångar (hårda klipp eller mjuka filtersvep).
+- **FRÖ** + **SLUMPA**: samma mall och känsla, en helt ny låt. **SLUMPA ALLT** slumpar allt.
+- **FORM**: EVIG (bygger vidare i timmar utan att upprepa sig) eller 64/128/192/256 takter som börjar om efter OUTRO.
+- **ENERGI** (färre breaks, fler klimax) · **VARIATION** (hur ofta element kommer och går) · **BRYTDJUP** (hur mycket som försvinner i breaken) · **BYGGLÄNGD** · **STÖK** (stutter, trumrullar, fills) · **FILTER** (hur mycket filtren rör sig) · **ANDAS** (tystnad sista slaget innan droppet) · **DUBKAST** (eko som ringer vidare) · **DJUP** (hur mycket motorn styr totalt).
+- Liten ratt per kanal: hur mycket motorn får styra just den kanalen.
+- **BREAK NU / BYGG NU / DROP NU**: ta över från nästa takt. **HÅLL**: loopa delen som spelar nu. **SLÄPP**: motorn kör vidare själv.
+- Tidslinjen visar delarna och vad varje kanal gör de kommande 56 takterna.
 
-- **LADDA MAPP** läser in alla ljudfiler i mappen och alla undermappar (wav, aif, flac, mp3, ogg).
-- **SLUMPA LOOP**: en ny slumpad loop ur hela mappen.
-- **SAMMA MAPP**: en ny slumpad loop ur samma undermapp som den som spelar.
-- **MAPPAR**: välj en undermapp i listan, så kommer en slumpad loop därifrån.
-- **◀ ▶**: förra och nästa loop.
-- **LOOPLÄNGD**: AUTO gissar hur många takter loopen är. Välj själv om den gissar fel.
-- Mappen och loopen sparas med låten.
+## Presets
 
-## Klangen
+40 fabrikspresets (motor-presets). Egna sparas med **SPARA** som `.stallverket`-filer i
+`Dokument/Phunkshunz/STALLVERKET/Presets`. Lägg en mapp med `.stallverket`-filer där (ett preset-pack), så syns de i listan under EGNA.
 
-| Del | Rattar | Vad det gör |
-|---|---|---|
-| **LOOP & SLAG** | LOOP, SLAG | Hur mycket av originalet som hörs. SLAG: tangenterna knackar på resonatorerna, så de låter även utan loop. |
-| **RESONANS** | ACKORD, GRUNDTON, NIVÅ, RINGNING, LJUS, SPRIDNING, OKTAV | Åtta stämda resonatorer. Varje slag i loopen ringer som ackordet: kicken blir en bastoner, hatten glittrar högt upp. |
-| **MOLN** | NIVÅ, KORN, TÄTHET, VANDRA, STÄMNING, FRYS | Korn ur loopen (40–500 ms, alltid mjuka) sträcks till mattor som vandrar genom loopen. STÄMNING stämmer kornen i ackordet. FRYS håller molnet still. |
-| **ANDNING & RUM** | ANDNING, FRAS, BAND, RUM, STORLEK, UT | Ett filter som öppnar och stänger med fraserna, band-wow och ett stort, mjukt rum. |
+Filformatet är vanlig XML:
 
-**Håll tangenter** så stäms resonatorerna och molnet om till just de tonerna. Spela ackord, så spelar loopen dem åt dig.
+```xml
+<STALLVERKET_PRESET namn="Mitt ställverk" version="1" mall="4" fro="96" form="0"
+  energi="0.75" variation="0.45" brytdjup="0.5" bygglangd="0.3" stok="0.7"
+  filter="0.4" andas="0.6" dub="0.05"/>
+```
 
-**IDÉ!** ger ett av sex recept (ringande trummor, fruset moln, dubkammare, glasklockor, drönare, puls i ackord) i en slumpad tonart. **MUTERA** ändrar lite, **ÅNGRA** backar 30 steg, och varje panel har en tärning. 12 presets.
+## Bra att veta
 
-Allt glider och inget klickar: kornen har mjuka fönster, nivåer och toner glider, och slutet är mjuk mättning plus en långsam automatisk nivå, så alla lägen låter ungefär lika starkt.
+- Motorn följer DAW:ens takt och position. Står transporten still går allt rakt igenom.
+- Alla kanaler räknar ut samma plan själva, så de byter del exakt samtidigt.
+- Hittar en KANAL ingen CENTRAL kör den vidare på de senaste inställningarna den fick (de sparas i projektet).
+- Allt som spelas spelas in i en buffert per kanal; det är den stutter och baklänges läser ur.
 
 ## Bygga själv
 
 ```
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
+cmake --build build --config Release
+c++ -std=c++17 -Isrc tests/motor_test.cpp -o motor_test && ./motor_test
 ```
-
-Testa motorn utan JUCE: `c++ -std=c++17 -O2 -Isrc tests/engine_test.cpp -o engine_test && ./engine_test`

@@ -1,10 +1,9 @@
-name: Bygg R-744 för macOS och Windows
+name: Bygg STÄLLVERKET för macOS, Windows och Linux
 
 on:
   push:
     branches: [main]
     tags: ["v*"]
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -18,8 +17,8 @@ jobs:
 
       - name: Testa motorn
         run: |
-          c++ -std=c++17 -O2 -Isrc tests/engine_test.cpp -o engine_test
-          ./engine_test
+          c++ -std=c++17 -O2 -Isrc tests/motor_test.cpp -o motor_test
+          ./motor_test
 
       - name: Konfigurera
         run: >
@@ -33,25 +32,23 @@ jobs:
 
       - name: Paketera
         run: |
-          ART=build/R744_artefacts/Release
-          mkdir -p dist/R-744
-          cp -R "$ART/VST3/R-744.vst3" dist/R-744/
-          cp -R "$ART/AU/R-744.component" dist/R-744/
-          cp -R "$ART/Standalone/R-744.app" dist/R-744/
-          cp scripts/installera.command dist/R-744/
-          chmod +x dist/R-744/installera.command
-          for b in dist/R-744/R-744.vst3 dist/R-744/R-744.component dist/R-744/R-744.app; do
+          ART=build/Stallverket_artefacts/Release
+          mkdir -p dist/STALLVERKET
+          cp -R "$ART/VST3/STALLVERKET.vst3" dist/STALLVERKET/
+          cp -R "$ART/AU/STALLVERKET.component" dist/STALLVERKET/
+          cp scripts/installera.command dist/STALLVERKET/
+          cp README.md dist/STALLVERKET/LASMIG.md
+          chmod +x dist/STALLVERKET/installera.command
+          for b in dist/STALLVERKET/STALLVERKET.vst3 dist/STALLVERKET/STALLVERKET.component; do
             codesign --force --deep --sign - "$b"
           done
-          cd dist && ditto -c -k --keepParent R-744 R744-macOS.zip
-
+          cd dist && ditto -c -k --keepParent STALLVERKET STALLVERKET-macOS.zip
 
       - name: Ladda upp
         uses: actions/upload-artifact@v4
         with:
-          name: R744-macOS
-          path: dist/R744-macOS.zip
-
+          name: STALLVERKET-macOS
+          path: dist/STALLVERKET-macOS.zip
 
   windows:
     runs-on: windows-2022
@@ -67,18 +64,18 @@ jobs:
       - name: Paketera
         shell: pwsh
         run: |
-          $ART = "build/R744_artefacts/Release"
-          New-Item -ItemType Directory -Force dist/R-744 | Out-Null
-          Copy-Item -Recurse "$ART/VST3/R-744.vst3" dist/R-744/
-          Copy-Item "$ART/Standalone/R-744.exe" dist/R-744/
-          Copy-Item scripts/installera.bat dist/R-744/
-          Compress-Archive -Path dist/R-744 -DestinationPath dist/R744-Windows.zip
+          $ART = "build/Stallverket_artefacts/Release"
+          New-Item -ItemType Directory -Force dist/STALLVERKET | Out-Null
+          Copy-Item -Recurse "$ART/VST3/STALLVERKET.vst3" dist/STALLVERKET/
+          Copy-Item scripts/installera.bat dist/STALLVERKET/
+          Copy-Item README.md dist/STALLVERKET/LASMIG.md
+          Compress-Archive -Path dist/STALLVERKET -DestinationPath dist/STALLVERKET-Windows.zip
 
       - name: Ladda upp
         uses: actions/upload-artifact@v4
         with:
-          name: R744-Windows
-          path: dist/R744-Windows.zip
+          name: STALLVERKET-Windows
+          path: dist/STALLVERKET-Windows.zip
 
   linux:
     runs-on: ubuntu-22.04
@@ -88,36 +85,34 @@ jobs:
       - name: Installera beroenden
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libasound2-dev libjack-jackd2-dev ladspa-sdk libcurl4-openssl-dev libfreetype6-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libwebkit2gtk-4.0-dev libglu1-mesa-dev mesa-common-dev
+          sudo apt-get install -y --no-install-recommends libasound2-dev libjack-jackd2-dev ladspa-sdk libcurl4-openssl-dev libfreetype6-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev libglu1-mesa-dev mesa-common-dev
 
       - name: Konfigurera
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Bygg
-        run: cmake --build build --config Release --target R744_VST3 R744_LV2 -j 4
+        run: cmake --build build --config Release --target Stallverket_VST3 Stallverket_LV2 -j 4
 
       - name: Paketera
         run: |
-          mkdir -p dist/R744
-          for t in R744; do
-            cp -R build/${t}_artefacts/Release/VST3/*.vst3 dist/R744/
-            cp -R build/${t}_artefacts/Release/LV2/*.lv2 dist/R744/
-          done
-          cp scripts/installera-linux.sh dist/R744/
-          chmod +x dist/R744/installera-linux.sh
-          cd dist && zip -r -y R744-Linux.zip R744
+          mkdir -p dist/STALLVERKET
+          cp -R build/Stallverket_artefacts/Release/VST3/*.vst3 dist/STALLVERKET/
+          cp -R build/Stallverket_artefacts/Release/LV2/*.lv2 dist/STALLVERKET/
+          cp scripts/installera-linux.sh dist/STALLVERKET/
+          chmod +x dist/STALLVERKET/installera-linux.sh
+          cd dist && zip -r -y STALLVERKET-Linux.zip STALLVERKET
 
       - name: Ladda upp
         uses: actions/upload-artifact@v4
         with:
-          name: R744-Linux
-          path: dist/R744-Linux.zip
+          name: STALLVERKET-Linux
+          path: dist/STALLVERKET-Linux.zip
 
-  # Varje bygge på main blir en release, så att
-  # .../releases/latest/download/R744-macOS.zip alltid ger senaste versionen.
+  # Varje bygge på main blir en release:
+  # .../releases/latest/download/STALLVERKET-macOS.zip ger alltid senaste versionen.
   release:
     if: github.event_name == 'push'
-    needs: [macos, windows]
+    needs: [macos, windows, linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -129,10 +124,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('bygge-{0}', github.run_number) }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('R-744 bygge {0}', github.run_number) }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('STÄLLVERKET bygge {0}', github.run_number) }}
           target_commitish: ${{ github.sha }}
           make_latest: true
-          body: "Ladda ner R744-macOS.zip nedan. Installera enligt README."
+          body: "Ladda ner STALLVERKET-macOS.zip (Mac), STALLVERKET-Windows.zip eller STALLVERKET-Linux.zip. Installera enligt README."
           files: |
-            dist/R744-macOS.zip
-            dist/R744-Windows.zip
+            dist/STALLVERKET-macOS.zip
+            dist/STALLVERKET-Windows.zip
+            dist/STALLVERKET-Linux.zip

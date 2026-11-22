@@ -1,98 +1,108 @@
 #pragma once
+
 #include <juce_audio_processors/juce_audio_processors.h>
-#include <juce_audio_formats/juce_audio_formats.h>
-#include "Klang.h"
-#include <deque>
-#include <memory>
+#include <atomic>
+#include "Motor.h"
+#include "Ledning.h"
+#include "Fack.h"
 
-struct KlangPreset
-{
-    const char* name;
-    const char* group;
-    std::vector<std::pair<const char*, float>> values; // parameter-id -> verkligt värde
-};
-
-class R744Processor : public juce::AudioProcessor
+// STÄLLVERKET: maskinen som alla kanaler går igenom.
+//
+// Läggs på varje kanal som ska vara med i låten. En av dem är CENTRAL: den
+// håller motorn och inställningarna och skickar ut dem till de andra. Varje
+// instans (även CENTRAL) behandlar ljudet på sin egen kanal efter sin ROLL.
+class StallverketProcessor : public juce::AudioProcessor
 {
 public:
-    R744Processor();
-    ~R744Processor() override = default;
+    StallverketProcessor();
+    ~StallverketProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
-    bool isBusesLayoutSupported (const BusesLayout&) const override;
+    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
-    const juce::String getName() const override { return "R-744"; }
-    bool acceptsMidi() const override { return true; }
+
+    const juce::String getName() const override { return "STALLVERKET"; }
+    bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
-    bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return std::numeric_limits<double>::infinity(); } // aldrig sövas av DAW:en
+    double getTailLengthSeconds() const override { return 4.0; }
 
     int getNumPrograms() override;
-    int getCurrentProgram() override { return currentProgram; }
+    int getCurrentProgram() override { return currentPreset; }
     void setCurrentProgram (int index) override;
     const juce::String getProgramName (int index) override;
     void changeProgramName (int, const juce::String&) override {}
 
-    void getStateInformation (juce::MemoryBlock&) override;
-    void setStateInformation (const void*, int) override;
+    void getStateInformation (juce::MemoryBlock& destData) override;
+    void setStateInformation (const void* data, int sizeInBytes) override;
 
-    // ---- message-tråden ----
-    juce::String loadSample (const juce::File& f);       // tom sträng = OK
-    bool hasSample() const { return current != nullptr; }
-    juce::String sampleName() const { return samplePath.isEmpty() ? juce::String() : juce::File (samplePath).getFileNameWithoutExtension(); }
-    const std::vector<float>& peaks() const { return wavePeaks; }
-    int loopBeats() const { return current ? current->beats : 0; }
+    static juce::AudioProcessorValueTreeState::ParameterLayout skapaParametrar();
 
-    // ---- MAPP: ladda en hel mapp med loopar (med undermappar) och byt snabbt ----
-    juce::String loadFolder (const juce::File& dir);
-    juce::String randomLoop (bool sameFolder);   // slumpa ur hela mappen, eller ur samma undermapp
-    juce::String stepLoop (int dir);             // nästa / förra i listan
-    juce::String randomFromSub (int subIndex);   // slumpa ur en viss undermapp
-    juce::StringArray subfolders() const;        // undermapparna (relativt rotmappen)
-    int folderSize() const { return folderFiles.size(); }
-    juce::String folderName() const { return folderRoot.getFileName(); }
-    juce::String currentSub() const;
+    juce::AudioProcessorValueTreeState state;
 
-    juce::String idea();      // IDÉ!: ett nytt genomtänkt läge
-    juce::String mutate();    // MUTERA: lite här och där
-    juce::String rollSection (int section); // tärning: 0 RESONANS, 1 MOLN, 2 ANDNING/RUM
-    void undo();
-    bool canUndo() const { return ! undoStack.empty(); }
+    // ---- för panelen
+    bool arCentral() const;
+    int  kanal() const;     // 0..7
+    int  roll() const;      // 0..8 (8 = ORÖRD)
+    motor::Installning installning() const;   // det som gäller just nu (från CENTRAL eller sparat)
+    motor::Overstyr overstyr() const;
+    bool centralLever() const;
+    bool extraCentral() const { return annanCentral.load(); }
+    double slagNu() const { return slag.load(); }
+    bool spelarNu() const { return spelar.load(); }
+    int slagPerTakt() const { return spt.load(); }
+    float matare() const { return matarNiva.load(); }
+    float gainNu() const { return gainVisning.load(); }
+    float lpNu() const { return lpVisning.load(); }
+    float hpNu() const { return hpVisning.load(); }
+    static int64_t nuMs();
 
-    static const std::vector<KlangPreset>& presets();
+    // ---- knapparna på CENTRAL
+    void taOver (int typ);          // motor::BREAK / BYGG / DROP
+    void slappTaOver();
+    void vaxlaHall();
+    bool haller() const;
+    void slumpaFro();
+    void slumpaAllt();
 
-    juce::AudioProcessorValueTreeState apvts;
-    r744::Engine engine;
-    std::atomic<float> scanPos { 0.0f };
-    std::atomic<bool> running { false };
-    std::array<std::atomic<int>, 8> resNotes {};
-    std::atomic<int> heldCount { 0 };
+    // ---- presets
+    int  antalFabrik() const;
+    void laddaFabrik (int i);
+    juce::File presetMapp() const;
+    juce::Array<juce::File> egnaPresets() const;
+    bool sparaPreset (const juce::String& namn);
+    bool laddaPresetFil (const juce::File& f);
+    juce::String presetNamn() const { return aktivtPresetNamn; }
 
 private:
-    static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
-    r744::Params readParams() const;
-    void setParam (const char* id, float plain);
-    void pushUndo();
-    void applyBeatsMode();
+    void satt (const juce::String& id, float verkligt);
+    float las (const char* id) const;
+    void lasInstallning (float* ut) const;
+    motor::Installning fran (const float* v) const;
 
-    std::shared_ptr<r744::Sample> current, previous;
-    juce::File folderRoot;
-    juce::Array<juce::File> folderFiles;
-    int folderIndex = -1;
-    std::shared_ptr<int> alive = std::make_shared<int> (0);
-    std::atomic<const r744::Sample*> audioSample { nullptr };
-    juce::String samplePath;
-    std::vector<float> wavePeaks;
-    std::deque<juce::ValueTree> undoStack;
-    int currentProgram = 0;
     double sr = 48000.0;
+    fack::Fack fack;
+    std::vector<float> monoBuf;
+    motor::Plan plan;
+    motor::Installning planFor;
+    bool harPlan = false;
 
-    std::array<int, 16> held {};
-    int numHeld = 0;
+    float cache[ledning::kInst] {};
+    bool  harCache = false;
+    std::atomic<bool> annanCentral { false };
+    uint32_t minId = 0;
+    bool tillstandLaddat = false, autoGjord = false;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (R744Processor)
+    std::atomic<double> slag { 0.0 };
+    std::atomic<bool> spelar { false };
+    std::atomic<int> spt { 4 };
+    std::atomic<float> matarNiva { 0.0f }, gainVisning { 1.0f }, lpVisning { 1.0f }, hpVisning { 0.0f };
+
+    int currentPreset = 0;
+    juce::String aktivtPresetNamn;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StallverketProcessor)
 };

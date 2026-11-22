@@ -57,9 +57,9 @@ public:
         add (".\n\nDär lärde jag mig hur techno ska kännas: basen som får plåten att skramla, golvet som svettas, "
              "och rytmen som hänger efter, snubblar och ändå alltid landar på ettan.\n\n"
              "Någon sa att min musik låter som ett fuktigt betonggolv. Det tog jag som ett beröm.\n\n");
-        add ("R-744", true);
-        add (" kommer från kylbranschen: ljudet går genom en CO2-krets, "
-             "från förångaren till ventilen. Som allt annat i Maskinhallen är den byggd för att låta som det golvet.");
+        add ("STÄLLVERKET", true);
+        add (" är maskinhallens ställverk: alla kanaler kopplas in här, och motorn "
+             "bygger en låt av allt som strömmar igenom. Break, uppbyggnad och klimax, i takt med din DAW.");
         juce::TextLayout layout;
         layout.createLayout (body, (float) r.getWidth());
         layout.draw (g, r.removeFromTop ((int) layout.getHeight() + 4).toFloat());

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(R744 VERSION 3.1.0)
+project(STALLVERKET VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,51 +18,50 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(JUCE)
 
 if(APPLE)
-    set(R744_FORMATS VST3 AU Standalone)
+    set(STV_FORMATS VST3 AU)
 else()
-    set(R744_FORMATS VST3 Standalone)
+    set(STV_FORMATS VST3)
+endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    list(APPEND STV_FORMATS LV2)
 endif()
 
-# Samma plugin-kod som gamla R-744, så att den ersätter den i DAW:en
-# Linux: bygg även LV2
-set(PHZ_EXTRA_FORMATS "")
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(PHZ_EXTRA_FORMATS LV2)
-endif()
-juce_add_plugin(R744
-    COMPANY_NAME "phunkshunz"
-    PRODUCT_NAME "R-744"
-    BUNDLE_ID "com.phunkshunz.r744"
+# STÄLLVERKET är en effekt: den läggs på varje kanal som ska vara med i låten.
+juce_add_plugin(Stallverket
+    COMPANY_NAME "Phunkshunz"
+    PRODUCT_NAME "STALLVERKET"
+    BUNDLE_ID "com.phunkshunz.stallverket"
     PLUGIN_MANUFACTURER_CODE Phnk
-    PLUGIN_CODE R744
-    IS_SYNTH TRUE
-    NEEDS_MIDI_INPUT TRUE
+    PLUGIN_CODE Stlv
+    IS_SYNTH FALSE
+    NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     COPY_PLUGIN_AFTER_BUILD FALSE
-    VST3_CATEGORIES Instrument Sampler
-    AU_MAIN_TYPE kAudioUnitType_MusicDevice
-    LV2URI "https://phunkshunz.github.io/lv2/R744"
-    FORMATS ${R744_FORMATS} ${PHZ_EXTRA_FORMATS})
+    VST3_CATEGORIES Fx Tools
+    AU_MAIN_TYPE kAudioUnitType_Effect
+    LV2URI "https://phunkshunz.github.io/lv2/Stallverket"
+    FORMATS ${STV_FORMATS})
 
-target_sources(R744
+target_sources(Stallverket
     PRIVATE
         src/PluginProcessor.cpp
         src/PluginEditor.cpp)
 
-target_include_directories(R744 PRIVATE src)
+target_include_directories(Stallverket PRIVATE src)
 
-target_compile_definitions(R744
+target_compile_definitions(Stallverket
     PUBLIC
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
         JUCE_DISPLAY_SPLASH_SCREEN=0)
 
-target_link_libraries(R744
+target_link_libraries(Stallverket
     PRIVATE
         juce::juce_audio_utils
+        juce::juce_dsp
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
@@ -70,5 +69,15 @@ target_link_libraries(R744
 
 # MSVC: läs källkoden som UTF-8, så att å, ä och ö blir rätt
 if(MSVC)
-    target_compile_options(R744 PRIVATE /utf-8 /bigobj)
+    target_compile_options(Stallverket PRIVATE /utf-8 /bigobj)
+endif()
+
+# Test: cmake -B build -DSTV_TEST=ON && cmake --build build --target StallverketTest
+option(STV_TEST "Bygg testprogrammet" OFF)
+if(STV_TEST)
+    juce_add_console_app(StallverketTest PRODUCT_NAME "StallverketTest")
+    target_sources(StallverketTest PRIVATE tests/stv_test.cpp src/PluginProcessor.cpp src/PluginEditor.cpp)
+    target_include_directories(StallverketTest PRIVATE src)
+    target_compile_definitions(StallverketTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_STANDALONE_APPLICATION=0 JucePlugin_Name="STALLVERKET")
+    target_link_libraries(StallverketTest PRIVATE juce::juce_audio_utils juce::juce_dsp PUBLIC juce::juce_recommended_config_flags)
 endif()

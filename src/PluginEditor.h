@@ -1,101 +1,52 @@
 #pragma once
+
 #include "PluginProcessor.h"
 #include "Gui.h"
 #include "About.h"
 #include "Sprak.h"
 
-// Tärning (samma som i resten av MASKINHALLEN)
-class Dice : public juce::Button
+// Panelen: stor vy när instansen är CENTRAL, kompakt vy när den är en KANAL.
+class StallverketEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
-    explicit Dice (const juce::String& tip) : juce::Button ("dice") { setTooltip (tip); setMouseCursor (juce::MouseCursor::PointingHandCursor); }
-    void paintButton (juce::Graphics& g, bool over, bool down) override
-    {
-        using namespace ArmColours;
-        const float s = (float) juce::jmin (getWidth(), getHeight()) - 2.0f;
-        auto r = juce::Rectangle<float> (s, s).withCentre (getLocalBounds().toFloat().getCentre());
-        if (down) r = r.reduced (1.0f);
-        g.setColour (sodium.withAlpha (over ? 0.3f : 0.16f));
-        g.fillRoundedRectangle (r, s * 0.22f);
-        g.setColour (sodium);
-        g.drawRoundedRectangle (r.reduced (0.6f), s * 0.22f, 1.2f);
-        const float d = juce::jmax (2.0f, s * 0.17f);
-        for (auto p : { juce::Point<float> (0.28f, 0.28f), { 0.72f, 0.28f }, { 0.5f, 0.5f }, { 0.28f, 0.72f }, { 0.72f, 0.72f } })
-            g.fillEllipse (r.getX() + r.getWidth() * p.x - d * 0.5f, r.getY() + r.getHeight() * p.y - d * 0.5f, d, d);
-    }
-};
+    explicit StallverketEditor (StallverketProcessor&);
+    ~StallverketEditor() override;
 
-class WaveView : public juce::Component
-{
-public:
-    explicit WaveView (R744Processor& p) : proc (p) {}
-    void paint (juce::Graphics& g) override;
-private:
-    R744Processor& proc;
-};
-
-// Själva panelen. Byggs om när språket byts.
-class R744Panel : public juce::Component, public juce::FileDragAndDropTarget, private juce::Timer
-{
-public:
-    explicit R744Panel (R744Processor&);
-    ~R744Panel() override;
     void paint (juce::Graphics&) override;
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
 
-    bool isInterestedInFileDrag (const juce::StringArray&) override { return true; }
-    void filesDropped (const juce::StringArray& files, int, int) override;
-
 private:
     void timerCallback() override;
-    void setStatus (const juce::String& s) { status = s; repaint (statusArea); }
-    void chooseLoop();
-    void chooseFolder();
-    void subMenu();
+    void byggLayout();
+    void fyllPresets();
+    void ritaTidslinje (juce::Graphics&, juce::Rectangle<int>);
+    void ritaKanalvy (juce::Graphics&, juce::Rectangle<int>);
+    void sparaDialog();
 
-    R744Processor& proc;
+    StallverketProcessor& proc;
     ArmLnF lnf;
-    juce::TooltipWindow tips { this, 600 };
+    bool centralVy = false;
 
-    using BoxAtt = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
-    using BtnAtt = juce::AudioProcessorValueTreeState::ButtonAttachment;
-
-    WaveView wave { proc };
-    juce::TextButton loadBtn { "LADDA LOOP" }, folderBtn { "LADDA MAPP" }, randomBtn, sameBtn { "SAMMA MAPP" },
-                     prevBtn, nextBtn, subBtn { "MAPPAR" }, ideaBtn, mutateBtn { "MUTERA" }, undoBtn, freezeBtn { "FRYS" };
-    juce::ComboBox beatsBox, chordBox, rootBox, phraseBox, presetBox;
-    std::unique_ptr<BoxAtt> beatsAtt, chordAtt, rootAtt, phraseAtt;
-    std::unique_ptr<BtnAtt> freezeAtt;
-    Knob kLoop, kPing, kRes, kRing, kBright, kSpread, kOct, kCloud, kGrain, kDensity, kWander, kTune, kBreath, kWow, kRoom, kSize, kOut;
-    Dice diceRes { sprak::trU ("Slumpa resonansen: ackord, grundton, ringning") },
-         diceCloud { sprak::trU ("Slumpa molnet") },
-         diceAir { sprak::trU ("Slumpa andning och rum") };
-    std::unique_ptr<juce::FileChooser> chooser;
-    AboutOverlay about { "R-744", sprak::trU ("Klangmaskin · loopar blir ton") + " · v3.1" };
-
-    juce::String status;
-    juce::Rectangle<int> header, loopArea, pLoop, pRes, pCloud, pAir, statusArea, logoArea;
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (R744Panel)
-};
-
-//==============================================================================
-// Ramen runt panelen: SV | EN-knappen bygger om panelen på valt språk.
-class R744Editor : public juce::AudioProcessorEditor
-{
-public:
-    explicit R744Editor (R744Processor&);
-    ~R744Editor() override;
-    void resized() override;
-    void paint (juce::Graphics& g) override { g.fillAll (juce::Colour (0xff121314)); }
-
-private:
-    void byggPanel();
-
-    R744Processor& proc;
-    std::unique_ptr<R744Panel> panel;
+    juce::TextButton centralKnapp { "CENTRAL" };
+    juce::ComboBox kanalVal, rollVal, mallVal, formVal, presetVal;
+    juce::TextButton presetFore { "<" }, presetNasta { ">" }, sparaKnapp { "SPARA" };
+    juce::TextButton slumpaFro { "SLUMPA" }, slumpaAllt { "SLUMPA ALLT" };
+    juce::TextButton breakNu { "BREAK NU" }, byggNu { "BYGG NU" }, dropNu { "DROP NU" }, hallKnapp, slappKnapp;
     sprak::Knapp sprakKnapp;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (R744Editor)
+    Knob fro, energi, variation, brytdjup, bygglangd, stok, filter, andas, dub, djup;
+    juce::Slider kanalDjup[ledning::kKanaler];
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> kanalDjupAtt[ledning::kKanaler];
+    juce::TooltipWindow tips { this, 700 };
+
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> centralAtt;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> kanalAtt, rollAtt, mallAtt, formAtt;
+
+    juce::Rectangle<int> logoYta, tidYta, kanalYta;
+    std::unique_ptr<juce::FileChooser> valjare;
+    AboutOverlay om { juce::String::fromUTF8 ("STÄLLVERKET"), "mottagare + motor" };
+    juce::Array<juce::File> egna;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StallverketEditor)
 };
