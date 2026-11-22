@@ -177,5 +177,17 @@ inline constexpr Par kOrdlista[] =
     { "REC: VÄNTAR PÅ TAKT", "REC: WAITING FOR BAR" },
     { "● SPELAR IN", "● RECORDING" },
     { "Spelar in varje kanal som en egen WAV på skrivbordet (mappen STÄLLVERKET inspelningar). Börjar och slutar på hel takt. Lägg CENTRAL på mastern med ROLL = ORÖRD för hela mixen.", "Records every channel as its own WAV on the desktop (folder STÄLLVERKET inspelningar). Starts and stops on a full bar. Put CENTRAL on the master with ROLE = UNTOUCHED to get the full mix." },
+    { "PLASTIK", "PLASTIK" },
+    { "HOOD", "HOOD" },
+    { "FASFÖRSKJUTNING", "PHASE SHIFT" },
+    { "DUBKEDJA", "DUB CHAIN" },
+    { "FILTERBÅGE", "FILTER ARC" },
+    { "BASSVEP", "BASS SWEEP" },
+    { "KICKPAUS", "KICK PAUSE" },
+    { "En kanal glider en 1/16 var åttonde takt mot de andra, som hos Steve Reich. Groovet ändras utan att något läggs till.", "One channel slips a 1/16 every eight bars against the others, like Steve Reich. The groove changes without adding anything." },
+    { "I breaket matar ekot sig självt allt mer, nästan rundgång, och klipps tvärt i droppet.", "In the break the echo feeds itself more and more, almost into feedback, and is cut dead at the drop." },
+    { "En kanal får en långsam filterbåge genom delen: stängd, öppen i mitten, stängd igen.", "One channel gets a slow filter arc through the part: closed, open in the middle, closed again." },
+    { "Basen börjar stängd och sveper upp under droppets första takt.", "The bass starts closed and sweeps open during the first bar of the drop." },
+    { "Kicken andas ut de två sista slagen i en 16-taktsfras.", "The kick breathes out for the last two beats of a 16-bar phrase." },
 };
 } // namespace sprak

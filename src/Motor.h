@@ -51,7 +51,7 @@ inline float slump01 (uint32_t h) { return (float) (blanda (h) & 0xffffff) / 167
 
 //==============================================================================
 // MALLAR: olika sätt att bygga en låt.
-enum Sarskild { S_INGEN, S_SPEGEL, S_STAPLA, S_FALSKT, S_DUELL, S_TELEFON, S_SVARM, S_SKRIFT };
+enum Sarskild { S_INGEN, S_SPEGEL, S_STAPLA, S_FALSKT, S_DUELL, S_TELEFON, S_SVARM, S_SKRIFT, S_PLASTIK, S_HOOD };
 struct Mall
 {
     const char* namn;
@@ -84,6 +84,8 @@ inline constexpr Mall kMallar[] =
     { "TELEFON",     { 16,32,16,16,16,32,32,16,16 }, 0.30f,0.35f,0.25f,0.10f,0.60f,0.25f, 0.3f,0.2f,0.4f,0.6f, true,  S_TELEFON },
     { "SVÄRM",       {  8,16, 8, 8, 8,16,16, 8, 8 }, 0.30f,0.35f,0.25f,0.25f,0.50f,0.20f, 0.9f,0.6f,0.2f,0.4f, false, S_SVARM },
     { "SKRIFTEN",    { 16,32,16,16, 8,16,32,16,16 }, 0.35f,0.40f,0.15f,0.15f,0.50f,0.30f, 0.5f,0.3f,0.2f,0.5f, false, S_SKRIFT },
+    { "PLASTIK",     { 64,64,32,16,32,32,64,32,32 }, 0.40f,0.30f,0.20f,0.20f,0.45f,0.30f, 0.3f,0.2f,0.4f,0.9f, true,  S_PLASTIK },
+    { "HOOD",        { 32,64,32, 8, 8,64,64,32,32 }, 0.20f,0.10f,0.05f,0.60f,0.30f,0.25f, 0.6f,0.1f,0.1f,0.6f, false, S_HOOD },
 };
 inline constexpr int kAntalMallar = (int) (sizeof (kMallar) / sizeof (kMallar[0]));
 
@@ -112,7 +114,7 @@ struct Installning
     float    kurva[8]  { 0.3f, 0.45f, 0.6f, 0.7f, 0.85f, 1.0f, 0.7f, 0.4f };
 
     // TRICK: vilka effekter som är på (bitar, se Trick) och hur ofta de händer
-    uint32_t trick      = 0xFFFu;
+    uint32_t trick      = 0x1FFFFu;
     float    trickMangd = 0.5f;
     uint32_t levande    = 0;    // vilka kanaler som har ljud (för TOMRUM), styr inte planen
 
@@ -134,9 +136,10 @@ struct Installning
 enum Trick : uint32_t
 {
     T_FRYS = 1u << 0, T_HALVTID = 1u << 1, T_BAKBREAK = 1u << 2, T_VINYL = 1u << 3, T_RADIO = 1u << 4, T_EKO = 1u << 5,
-    T_TOMRUM = 1u << 6, T_STAM = 1u << 7, T_GLAPP = 1u << 8, T_BYT = 1u << 9, T_SPOKE = 1u << 10, T_STOPP = 1u << 11
+    T_TOMRUM = 1u << 6, T_STAM = 1u << 7, T_GLAPP = 1u << 8, T_BYT = 1u << 9, T_SPOKE = 1u << 10, T_STOPP = 1u << 11,
+    T_FAS = 1u << 12, T_DUBKEDJA = 1u << 13, T_BAGE = 1u << 14, T_BASSVEP = 1u << 15, T_KICKPAUS = 1u << 16
 };
-inline constexpr int kAntalTrick = 12;
+inline constexpr int kAntalTrick = 17;
 
 // SKRIFTEN: "I16 G32 B U D K" -> delar. I=INTRO G=GROOVE L=LYFT B=BREAK U=BYGG (upp) D=DROP K=KLIMAX A=UTANDNING O=OUTRO
 inline int lasSkrift (const char* txt, int* ut, int max)
@@ -454,6 +457,9 @@ struct Atgard
     float    tapeLangd = 1.0f;  // tape stop: hur många slag inbromsningen tar (VINYLBROMS = en takt)
     bool     glapp   = false;   // BANDGLAPP: tonhöjden dippar som ett slirande band
     bool     byt     = false;   // KANALBYTE: vänster och höger byter plats
+    int      fas     = 0;       // FASFÖRSKJUTNING: kanalen ligger så här många 1/16-delar efter
+    float    dubFb   = 0.0f;    // DUBKEDJA: ekots återkoppling (0 = vanlig)
+    bool     ekoKlipp = false;  // klipper ekot tvärt (droppet efter en dubkedja)
 };
 
 inline uint16_t grindMonster (uint32_t h, float tathet)
@@ -723,6 +729,28 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
             }
             break;
 
+        case S_PLASTIK:
+        {
+            // en kanal står fast hela låten, kicken hålls borta länge och smäller in efter första breaket/bygget
+            const bool fast = roll == PERC;
+            if (fast && s.typ != OUTRO) { a.niva = 1.0f; a.stutter = s.typ == BYGG ? a.stutter : 0.0f; }
+            if (roll == KICK && s.index <= 1 && (s.typ == INTRO || s.typ == GROOVE || s.typ == LYFT)) a.niva = 0.0f;
+            if ((roll == CLAP || roll == RIDE) && (s.typ == GROOVE || s.typ == LYFT || s.typ == KLIMAX))
+                a.niva = slump01 (blanda (hk, (uint32_t) fras, 0x91A)) < 0.55f ? 1.0f : 0.0f;
+            break;
+        }
+
+        case S_HOOD:
+            if (s.typ == GROOVE || s.typ == LYFT || s.typ == KLIMAX || s.typ == DROP)
+            {
+                // ett nytt element ungefär varannan minut (var 64:e takt), inget hoppar ur
+                int64_t lat = takt; if (p.takter > 0) lat %= p.takter;
+                const int ord = intrADning (roll, m.atmoForst);
+                a.niva = lat >= (int64_t) ord * 32 ? 1.0f : 0.0f;
+                if (roll == KICK) a.niva = 1.0f;
+            }
+            break;
+
         default: break;
     }
 
@@ -826,6 +854,54 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
                 if (iTakt >= sptD - 0.5) { a.niva = 0.0f; a.hard = true; }   // andra halvan av sista slaget
             }
         }
+    }
+
+    // ---- DUBKEDJA: i breaket matar ekot sig självt allt mer, och klipps tvärt i droppet
+    if ((in.trick & T_DUBKEDJA) && slump01 (s.h + 91) < in.trickMangd)
+    {
+        if (s.typ == BREAK && roll != KICK && roll != BAS)
+        {
+            a.dubFb = 0.55f + 0.37f * t;
+            a.dub = std::fmax (a.dub, (roll == SYNT || roll == VOX || roll == PERC || roll == CLAP || roll == LOOP) ? 0.45f : 0.2f);
+        }
+    }
+    if ((s.typ == DROP || s.typ == KLIMAX) && tid == 0 && iTakt < 0.25 && (in.trick & T_DUBKEDJA))
+    {
+        int64_t ti = 0;
+        const auto forra = aktuell (p, o, s.start - 1, ti);
+        if (forra.typ == BREAK || forra.typ == BYGG) a.ekoKlipp = true;
+    }
+
+    // ---- FILTERBÅGE: en kanal per del får en långsam båge: ner, lite upp, ner igen före slutet
+    if ((in.trick & T_BAGE) && (s.typ == GROOVE || s.typ == LYFT || s.typ == UTANDNING || s.typ == KLIMAX)
+        && slump01 (s.h + 101) < in.trickMangd * 1.4f)
+    {
+        static const int bageRoll[] = { SYNT, LOOP, PERC, HATS, ATMO, BAS };
+        if (roll == bageRoll[blanda (s.h + 102) % 6])
+        {
+            const float bage = 0.42f + 0.38f * std::sin (3.14159265f * t);   // öppnast i mitten av delen
+            a.lp = std::fmin (a.lp, bage);
+        }
+    }
+
+    // ---- FASFÖRSKJUTNING: en kanal glider en 1/16 var åttonde takt (Reich), tillbaka efter fyra steg
+    if ((in.trick & T_FAS) && (s.typ == GROOVE || s.typ == LYFT || s.typ == UTANDNING || s.typ == KLIMAX)
+        && slump01 (s.h + 111) < in.trickMangd * 1.4f)
+    {
+        static const int fasRoll[] = { SYNT, PERC, LOOP, CLAP };
+        if (roll == fasRoll[blanda (s.h + 112) % 4]) a.fas = (int) (fras % 4);
+    }
+
+    // ---- BASSVEP: basen börjar stängd och öppnar sig under droppets första takt
+    if ((in.trick & T_BASSVEP) && roll == BAS && (s.typ == DROP || s.typ == KLIMAX) && tid == 0
+        && slump01 (s.h + 121) < in.trickMangd * 1.6f)
+        a.lp = std::fmin (a.lp, (float) (0.25 + 0.75 * (iTakt / sptD)));
+
+    // ---- KICKPAUS: kicken andas ut de två sista slagen i varje 16-taktsfras
+    if ((in.trick & T_KICKPAUS) && roll == KICK && (s.typ == GROOVE || s.typ == KLIMAX || s.typ == DROP)
+        && (tid % 16) == 15 && slagKvar > sptD && kvarITakt <= 2.0 && slump01 (blanda (s.h, (uint32_t) (tid / 16), 0xC1)) < in.trickMangd * 1.4f)
+    {
+        a.niva = 0.0f; a.hard = true;
     }
 
     // dubkast i slutet av breaket

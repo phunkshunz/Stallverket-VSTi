@@ -216,6 +216,26 @@ public:
 
             float xL = inL, xR = inR;
 
+            // ---- FASFÖRSKJUTNING: läs kanalen några 1/16 senare, med mjuk övertoning när steget byts
+            {
+                const int malFas = (d > 0.5f && spelar) ? a.fas : 0;
+                if (malFas != fasNu && fasTona <= 0) { fasForra = fasNu; fasNu = malFas; fasTona = (int) (sr * 0.02f); }
+                if (fasNu != 0 || fasTona > 0)
+                {
+                    const double s16 = sampelPerSlag * 0.25;
+                    float nL = inL, nR = inR, fL2 = inL, fR2 = inR;
+                    if (fasNu != 0)    lasRing ((double) skriv - fasNu * s16, nL, nR);
+                    if (fasForra != 0) lasRing ((double) skriv - fasForra * s16, fL2, fR2);
+                    if (fasTona > 0)
+                    {
+                        const float w = (float) fasTona / (sr * 0.02f);
+                        xL = nL * (1.0f - w) + fL2 * w; xR = nR * (1.0f - w) + fR2 * w;
+                        if (--fasTona <= 0) fasForra = fasNu;
+                    }
+                    else { xL = nL; xR = nR; }
+                }
+            }
+
             // ---- stutter: första biten spelas som vanligt, sedan upprepas den
             if (stut)
             {
@@ -332,11 +352,19 @@ public:
             // ---- dubkast: skickas före nivån, så ekot ringer vidare när kanalen tystnar
             const int ekoTid = std::clamp ((int) (sampelPerSlag * 0.75), 64, ekoLen - 1);
             int ekoLas = ekoSkriv - ekoTid; if (ekoLas < 0) ekoLas += ekoLen;
-            const float eL = eko[(size_t) ekoLas * 2], eR = eko[(size_t) ekoLas * 2 + 1];
+            float eL = eko[(size_t) ekoLas * 2], eR = eko[(size_t) ekoLas * 2 + 1];
+            ekoKlippG += 0.01f * ((ekoKlippN > 0 ? 0.0f : 1.0f) - ekoKlippG);
             ekoLp[0] += 0.25f * (eR - ekoLp[0]);       // korsat: ekot pingpongar
             ekoLp[1] += 0.25f * (eL - ekoLp[1]);
-            eko[(size_t) ekoSkriv * 2]     = xL * dub + ekoLp[0] * 0.55f;
-            eko[(size_t) ekoSkriv * 2 + 1] = xR * dub + ekoLp[1] * 0.55f;
+            // DUBKEDJA höjer återkopplingen mot rundgång; mjuk mättning så det aldrig skenar
+            const float malFb = (a.dubFb > 0.0f && d > 0.5f) ? std::min (0.93f, a.dubFb) : 0.55f;
+            ekoFb += 0.0005f * (malFb - ekoFb);
+            if (a.ekoKlipp && d > 0.5f) ekoKlippN = (int) (sr * 0.06f);
+            float fbL = std::tanh (ekoLp[0] * ekoFb * 1.2f) / 1.2f, fbR = std::tanh (ekoLp[1] * ekoFb * 1.2f) / 1.2f;
+            float ekoUt = 1.0f;
+            if (ekoKlippN > 0) { ekoUt = 0.0f; fbL = fbR = 0.0f; --ekoKlippN; }   // droppet: ekot klipps tvärt
+            eko[(size_t) ekoSkriv * 2]     = xL * dub * ekoUt + fbL;
+            eko[(size_t) ekoSkriv * 2 + 1] = xR * dub * ekoUt + fbR;
             if (++ekoSkriv >= ekoLen) ekoSkriv = 0;
 
             // ---- pump: kicken trycker ner kanalen på varje slag (ingen routing, följer takten)
@@ -380,8 +408,8 @@ public:
             }
             else frysAktiv = false;
 
-            float oL = xL * gain * pumpN + eL + rL + fL;
-            float oR = xR * gain * pumpN + eR + rR + fR;
+            float oL = xL * gain * pumpN + eL * ekoKlippG + rL + fL;
+            float oR = xR * gain * pumpN + eR * ekoKlippG + rR + fR;
 
             // ---- KANALBYTE: vänster och höger byter plats, mjukt
             bytN += 0.001f * ((a.byt && d > 0.5f ? 1.0f : 0.0f) - bytN);
@@ -436,7 +464,8 @@ private:
     double tapePos = 0;
     bool halvAktiv = false, bakLangAktiv = false, frysAktiv = false;
     int halvAnkare = 0, halvN = 0, bakLangAnkare = 0, bakLangN = 0, frysAnkare = 0, frysN = 0, glappN = 0;
-    float bytN = 0;
+    float bytN = 0, ekoFb = 0.55f, ekoKlippG = 1.0f;
+    int fasNu = 0, fasForra = 0, fasTona = 0, ekoKlippN = 0;
     bool stutterAktiv = false, bakAktiv = false;
     float stutterLangd = 0;
     double stutterBit = 0;

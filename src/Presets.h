@@ -18,7 +18,7 @@ struct Fabrik
 };
 
 // mall: 0 KLASSISK 1 MINIMAL 2 PEAK 3 HYPNOS 4 DOCKLANDS 5 STÖK 6 DUB 7 BERG-O-DAL
-//       8 SPEGEL 9 STAPLA 10 FALSKT DROP 11 DUELL 12 TELEFON 13 SVÄRM 14 SKRIFTEN
+//       8 SPEGEL 9 STAPLA 10 FALSKT DROP 11 DUELL 12 TELEFON 13 SVÄRM 14 SKRIFTEN 15 PLASTIK 16 HOOD
 // form: 0 EVIG 1 64 2 128 3 192 4 256
 inline constexpr Fabrik kFabrik[] =
 {
@@ -70,6 +70,11 @@ inline constexpr Fabrik kFabrik[] =
     { "Ring mig",                  12, 0, 0.55f,0.40f,0.60f,0.60f,0.30f,0.70f,0.50f,0.40f, 46 },
     { "Bisvärmen",                 13, 0, 0.75f,0.80f,0.50f,0.30f,0.70f,0.50f,0.50f,0.20f, 53 },
     { "Enligt skriften",           14, 0, 0.60f,0.50f,0.60f,0.50f,0.40f,0.60f,0.50f,0.20f, 70 },
+    { "Spastisk väntan",           15, 0, 0.60f,0.30f,0.60f,0.80f,0.30f,0.90f,0.50f,0.40f, 93 },
+    { "Plastikmannen",             15, 0, 0.70f,0.40f,0.50f,0.60f,0.40f,0.80f,0.40f,0.50f, 98 },
+    { "Minus en timme",            16, 4, 0.50f,0.10f,0.30f,0.50f,0.10f,0.60f,0.20f,0.20f, 94 },
+    { "Hood i maskinhallen",       16, 0, 0.60f,0.20f,0.30f,0.40f,0.20f,0.50f,0.30f,0.10f, 13 },
+    { "Dubkedjan",                  6, 0, 0.50f,0.50f,0.80f,0.60f,0.20f,0.70f,0.40f,1.00f, 27 },
 };
 inline constexpr int kAntal = (int) (sizeof (kFabrik) / sizeof (kFabrik[0]));
 } // namespace presets

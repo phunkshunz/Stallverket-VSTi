@@ -163,9 +163,11 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
 
     // ---- trick
     const char* trickId[] = { "t_frys", "t_halvtid", "t_bak", "t_vinyl", "t_radio", "t_eko", "t_tomrum",
-                              "t_stam", "t_glapp", "t_byt", "t_spoke", "t_stopp" };
+                              "t_stam", "t_glapp", "t_byt", "t_spoke", "t_stopp",
+                              "t_fas", "t_dubkedja", "t_bage", "t_bassvep", "t_kickpaus" };
     const char* trickText[] = { "FRYS", "HALVTID", "BAKLÄNGES", "VINYLBROMS", "RADIOBYTE", "KORT EKO", "TOMRUM",
-                                "STAMNING", "BANDGLAPP", "KANALBYTE", "SPÖKEKO", "STOPP-SLAG" };
+                                "STAMNING", "BANDGLAPP", "KANALBYTE", "SPÖKEKO", "STOPP-SLAG",
+                                "FASFÖRSKJUTNING", "DUBKEDJA", "FILTERBÅGE", "BASSVEP", "KICKPAUS" };
     const char* trickTips[] = {
         "Sista biten innan breaket fryses och ringer vidare medan allt annat tystnar.",
         "Breaket spelar i halv hastighet, tungt och segt.",
@@ -178,7 +180,12 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
         "Tonhöjden dippar ett slag, som ett band som slirar.",
         "Vänster och höger byter plats en takt.",
         "En kanal försvinner men dess eko hörs vidare.",
-        "Allt tystnar ett halvt slag mitt i takten." };
+        "Allt tystnar ett halvt slag mitt i takten.",
+        "En kanal glider en 1/16 var åttonde takt mot de andra, som hos Steve Reich. Groovet ändras utan att något läggs till.",
+        "I breaket matar ekot sig självt allt mer, nästan rundgång, och klipps tvärt i droppet.",
+        "En kanal får en långsam filterbåge genom delen: stängd, öppen i mitten, stängd igen.",
+        "Basen börjar stängd och sveper upp under droppets första takt.",
+        "Kicken andas ut de två sista slagen i en 16-taktsfras." };
     for (int i = 0; i < motor::kAntalTrick; ++i)
     {
         trickKnapp[i].setButtonText (utf8 (trickText[i]));
@@ -386,13 +393,13 @@ void StallverketEditor::resized()
         auto c2 = tv.removeFromLeft (sp); tv.removeFromLeft (12);
         auto c3 = tv;
         trickRub[0] = c1.removeFromTop (16); trickRub[1] = c2.removeFromTop (16); trickRub[2] = c3.removeFromTop (16);
-        const int bh = 30;
-        // BREAK: frys, halvtid, baklänges, tomrum, radio
-        for (int i : { 0, 1, 2, 6, 4 }) { trickKnapp[i].setBounds (c1.removeFromTop (bh).reduced (0, 3)); }
-        // ÖVERGÅNG: vinyl, eko
-        for (int i : { 3, 5 }) { trickKnapp[i].setBounds (c2.removeFromTop (bh).reduced (0, 3)); }
+        const int bh = juce::jmin (30, c3.getHeight() / 9);
+        // BREAK: frys, halvtid, baklänges, tomrum, radio, dubkedja
+        for (int i : { 0, 1, 2, 6, 4, 13 }) { trickKnapp[i].setBounds (c1.removeFromTop (bh).reduced (0, 2)); }
+        // ÖVERGÅNG: vinyl, eko, bassvep
+        for (int i : { 3, 5, 15 }) { trickKnapp[i].setBounds (c2.removeFromTop (bh).reduced (0, 2)); }
         // GROOVE
-        for (int i : { 7, 8, 9, 10, 11 }) { trickKnapp[i].setBounds (c3.removeFromTop (bh).reduced (0, 3)); }
+        for (int i : { 7, 8, 9, 10, 11, 12, 14, 16 }) { trickKnapp[i].setBounds (c3.removeFromTop (bh).reduced (0, 2)); }
 
         // kurva
         auto kv = tidYta.reduced (8).withTrimmedTop (26);

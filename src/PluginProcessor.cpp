@@ -16,9 +16,10 @@ const char* const kInstId[] = { "mall", "fro", "form", "energi", "variation", "b
                                 "e_plyft", "e_pbreak", "e_pbygg", "e_pdrop", "e_pklimax", "e_putand",
                                 "e_hard", "e_stok", "e_dub", "e_filter", "e_atmo",
                                 "t_frys", "t_halvtid", "t_bak", "t_vinyl", "t_radio", "t_eko", "t_tomrum",
-                                "t_stam", "t_glapp", "t_byt", "t_spoke", "t_stopp", "trickmangd" };
-constexpr int kAntalInst = 74;
-constexpr int kITrick = 61, kITrickMangd = 73;
+                                "t_stam", "t_glapp", "t_byt", "t_spoke", "t_stopp", "trickmangd",
+                                "t_fas", "t_dubkedja", "t_bage", "t_bassvep", "t_kickpaus" };
+constexpr int kAntalInst = 79;
+constexpr int kITrick = 61, kITrickMangd = 73, kITrick2 = 74;
 constexpr int kIKurva = 31, kIEgen = 41;
 constexpr int kKurvTakter[] = { 128, 256, 512, 1024, 2048 };
 constexpr int kIPump = 28, kIPumpTid = 29, kIOvergang = 30;
@@ -106,6 +107,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout StallverketProcessor::skapaP
     for (int i = 0; i < 12; ++i)
         p.push_back (std::make_unique<AudioParameterBool> (ParameterID { trickId[i], 1 }, String::fromUTF8 (trickNamn[i]), true));
     knapp ("trickmangd", "Hur ofta", 0.35f);
+    const char* trick2Id[] = { "t_fas", "t_dubkedja", "t_bage", "t_bassvep", "t_kickpaus" };
+    const char* trick2Namn[] = { "Fasförskjutning", "Dubkedja", "Filterbåge", "Bassvep", "Kickpaus" };
+    for (int i = 0; i < 5; ++i)
+        p.push_back (std::make_unique<AudioParameterBool> (ParameterID { trick2Id[i], 1 }, String::fromUTF8 (trick2Namn[i]), true));
     // knappar som går att mappa till en controller (reagerar när de slås på)
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "breaknu", 1 }, "Break nu", false));
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "byggnu", 1 },  "Bygg nu", false));
@@ -194,7 +199,8 @@ motor::Installning StallverketProcessor::fran (const float* v) const
     e.hard = q[6]; e.stok = q[7]; e.dub = q[8]; e.filter = q[9]; e.atmoForst = q[10] > 0.5f;
 
     in.trick = 0;
-    for (int i = 0; i < motor::kAntalTrick; ++i) if (v[kITrick + i] > 0.5f) in.trick |= 1u << i;
+    for (int i = 0; i < 12; ++i) if (v[kITrick + i] > 0.5f) in.trick |= 1u << i;
+    for (int i = 0; i < 5; ++i)  if (v[kITrick2 + i] > 0.5f) in.trick |= 1u << (12 + i);
     in.trickMangd = v[kITrickMangd];
 
     // SKRIFTEN: CENTRAL läser sin egen text, kanalerna läser den CENTRAL skickat
