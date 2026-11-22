@@ -36,6 +36,7 @@ public:
     inline void sampla (float x, double slag)
     {
         if (startSlag < 0.0) startSlag = std::floor (slag);
+        senasteSlag = slag;
         lag += aLag * (x - lag);
         hogLp += aHog * (x - hogLp);
         const float hog = x - hogLp;
@@ -60,7 +61,7 @@ public:
             vila = (int) (sr * 0.09f);
         }
 
-        if (slag - startSlag >= 16.0) { klassa(); nollstall(); }
+        if (slag - startSlag >= (gissning < 0 ? 8.0 : 16.0)) { klassa(); nollstall(); }
     }
 
     int roll() const { return gissning; }
@@ -71,7 +72,7 @@ private:
         const double tot = eL + eM + eH;
         if (tot < 1e-6 || ljudSampel < sampel / 10) return;   // för tyst för att säga något
         const double fL = eL / tot, fM = eM / tot, fH = eH / tot;
-        const double perSlag = anslag / 16.0;
+        const double perSlag = anslag / std::max (1.0, senasteSlag - startSlag);
 #ifdef LYSSNA_DEBUG
         std::printf ("fL %.2f fM %.2f fH %.2f perSlag %.2f paSlag %.2f bak %.2f\n", fL, fM, fH, perSlag, anslag ? (double) paSlag / anslag : 0.0, paSlag ? (double) baktakt / paSlag : 0.0);
 #endif
@@ -101,7 +102,7 @@ private:
 
     float sr = 48000.0f, aLag = 0, aHog = 0, aSnabb = 0, aLangsam = 0;
     float lag = 0, hogLp = 0, snabb = 0, langsam = 0;
-    double eL = 0, eM = 0, eH = 0, startSlag = -1.0;
+    double eL = 0, eM = 0, eH = 0, startSlag = -1.0, senasteSlag = 0.0;
     int anslag = 0, paSlag = 0, baktakt = 0, vila = 0;
     int64_t ljudSampel = 0, sampel = 0;
     int gissning = -1, kandidat = -1;

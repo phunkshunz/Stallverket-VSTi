@@ -98,6 +98,8 @@ private:
     fack::Fack fack;
     lyssna::Lyssnare lyssnare;
     std::atomic<int> autoRoll { -1 };
+    double klocka = 0.0, forvantat = 0.0;
+    bool spelade = false;
     std::vector<float> monoBuf;
     motor::Plan plan;
     motor::Installning planFor;

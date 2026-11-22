@@ -40,7 +40,9 @@ int main (int argc, char** argv)
             for (int ch = 0; ch < 2; ++ch) for (int i = 0; i < 512; ++i) { float v = buf.getSample (ch, i); if (! std::isfinite (v)) ++nan; maxv = std::max (maxv, (double) std::abs (v)); }
         }
         ph.ppq += 512.0 * 130.0 / 60.0 / 48000.0;
+        if (ph.ppq >= 16.0) ph.ppq -= 16.0;   // DAW:en loopar 4 takter
     }
+    std::printf ("takt efter 3 min med 4-taktsloop: %d (ska vara ~97)  roll c: %d\n", (int) (a.slagNu() / 4), c.roll());
     std::printf ("NaN: %lld  max: %.3f  följer b mall=%d  MIDI-händelser: %lld\n", (long long) nan, maxv, b.installning().mall, (long long) midiN);
     a.taOver (motor::BYGG);
     const auto mid = a.exporteraMidi();

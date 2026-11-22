@@ -191,7 +191,7 @@ int  StallverketProcessor::roll() const
     const int r = rollVal();
     if (r != kRollAuto) return r;
     const int g = autoRoll.load();
-    return g >= 0 ? g : kRollOrord;   // har inte hört nog än: går rakt igenom
+    return g >= 0 ? g : motor::LOOP;   // har inte hört nog än: behandlas som LOOP så länge
 }
 
 bool StallverketProcessor::centralLever() const
@@ -310,6 +310,21 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         }
     const int slagPerTakt = juce::jmax (1, (int) std::lround (taktTaljare * 4.0 / juce::jmax (1, taktNamnare)));
     const double slagPerSampel = bpm / 60.0 / sr;
+
+    // ---- löpande klocka: när DAW:en loopar (hoppar bakåt) räknar motorn vidare,
+    // annars skulle låten fastna i samma fyra takter. Alla instanser får samma
+    // hopp i samma block, så alla räknar exakt lika utan att prata med varandra.
+    if (play)
+    {
+        if (! spelade) klocka = ppq;                                   // play: börja där DAW:en står
+        else if (ppq > forvantat + 0.5) klocka += ppq - forvantat;     // hopp framåt: följ med
+        // hopp bakåt (loop): ignorera, fortsätt räkna
+        forvantat = ppq + n * slagPerSampel;
+        ppq = klocka;
+        klocka += n * slagPerSampel;
+    }
+    spelade = play;
+
     slag.store (ppq); spelar.store (play); spt.store (slagPerTakt);
     if (central) nav.slag.store (ppq);
 
