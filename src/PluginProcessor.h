@@ -27,7 +27,7 @@ public:
 
     const juce::String getName() const override { return "STALLVERKET"; }
     bool acceptsMidi() const override { return false; }
-    bool producesMidi() const override { return false; }
+    bool producesMidi() const override { return true; }
     double getTailLengthSeconds() const override { return 4.0; }
 
     int getNumPrograms() override;
@@ -100,6 +100,11 @@ private:
     std::atomic<bool> spelar { false };
     std::atomic<int> spt { 4 };
     std::atomic<float> matarNiva { 0.0f }, gainVisning { 1.0f }, lpVisning { 1.0f }, hpVisning { 0.0f };
+
+    bool knappFore[5] {};
+    int midiNot = -1, senasteDelId = -1;
+    bool midiStartat = false;
+    int64_t notAv = 0;
 
     int currentPreset = 0;
     juce::String aktivtPresetNamn;

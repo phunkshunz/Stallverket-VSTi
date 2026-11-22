@@ -7,8 +7,9 @@ namespace
 // ordningen här = platsen i ledningens inst[]-lista
 const char* const kInstId[] = { "mall", "fro", "form", "energi", "variation", "brytdjup", "bygglangd",
                                 "stok", "filter", "andas", "dub", "djup",
-                                "djup1", "djup2", "djup3", "djup4", "djup5", "djup6", "djup7", "djup8" };
-constexpr int kAntalInst = 20;
+                                "djup1", "djup2", "djup3", "djup4", "djup5", "djup6", "djup7", "djup8",
+                                "pump", "pumptid" };
+constexpr int kAntalInst = 22;
 static_assert (kAntalInst <= ledning::kInst, "för många inställningar");
 
 juce::StringArray rollLista()
@@ -54,6 +55,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout StallverketProcessor::skapaP
     knapp ("andas",     "Andas",     0.4f);
     knapp ("dub",       "Dubkast",   0.2f);
     knapp ("djup",      "Djup",      1.0f);
+    knapp ("pump",      "Pump",      0.35f);
+    knapp ("pumptid",   "Pumptid",   0.4f);
+    // knappar som går att mappa till en controller (reagerar när de slås på)
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "breaknu", 1 }, "Break nu", false));
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "byggnu", 1 },  "Bygg nu", false));
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "dropnu", 1 },  "Drop nu", false));
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "hall", 1 },    String::fromUTF8 ("Håll"), false));
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "slapp", 1 },   String::fromUTF8 ("Släpp"), false));
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "midiut", 1 },  "MIDI ut", true));
     for (int i = 1; i <= ledning::kKanaler; ++i)
     {
         const auto id = "djup" + String (i);
@@ -244,9 +254,70 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     }
     else std::copy (std::begin (cache), std::end (cache), v);
 
+    // ---- knappar från controller (bara CENTRAL): reagerar när de slås på
+    if (central)
+    {
+        const char* ids[] = { "breaknu", "byggnu", "dropnu", "hall", "slapp" };
+        for (int i = 0; i < 5; ++i)
+        {
+            const bool pa = las (ids[i]) > 0.5f;
+            if (pa && ! knappFore[i])
+            {
+                if (i == 0) taOver (motor::BREAK);
+                else if (i == 1) taOver (motor::BYGG);
+                else if (i == 2) taOver (motor::DROP);
+                else if (i == 3) vaxlaHall();
+                else { slappTaOver(); if (haller()) vaxlaHall(); }
+            }
+            knappFore[i] = pa;
+        }
+    }
+
     const auto in = fran (v);
     if (! harPlan || in != planFor) { plan = motor::byggPlan (in); planFor = in; harPlan = true; }
     const auto ov = overstyr();
+
+    // ---- MIDI ut från CENTRAL när en ny del börjar:
+    //  not 36 + del (C1 INTRO, C#1 GROOVE, D1 LYFT, D#1 BREAK, E1 BYGG, F1 DROP, F#1 KLIMAX, G1 UTANDNING, G#1 OUTRO)
+    //  CC 20 = delens nummer, CC 21 = energi. Kanal 16.
+    if (central && las ("midiut") > 0.5f)
+    {
+        if (play)
+        {
+            const double slutSlag = ppq + n * slagPerSampel;
+            for (int64_t t = (int64_t) std::ceil (ppq / slagPerTakt - 1e-9); (double) t * slagPerTakt < slutSlag; ++t)
+            {
+                int64_t ti = 0;
+                const auto d = motor::aktuell (plan, ov, t, ti);
+                const int id = (int) (d.start * 16 + d.typ);
+                if (ti == 0 || ! midiStartat)
+                {
+                    if (id != senasteDelId || ! midiStartat)
+                    {
+                        const int pos = juce::jlimit (0, n - 1, (int) (((double) t * slagPerTakt - ppq) / slagPerSampel));
+                        if (midiNot >= 0) midi.addEvent (juce::MidiMessage::noteOff (16, midiNot), pos);
+                        midiNot = 36 + d.typ;
+                        midi.addEvent (juce::MidiMessage::noteOn (16, midiNot, (juce::uint8) 100), pos);
+                        midi.addEvent (juce::MidiMessage::controllerEvent (16, 20, d.typ), pos);
+                        midi.addEvent (juce::MidiMessage::controllerEvent (16, 21, juce::jlimit (0, 127, (int) (in.energi * 127.0f))), pos);
+                        senasteDelId = id;
+                        midiStartat = true;
+                        notAv = (int64_t) (sr * 0.1);
+                    }
+                }
+            }
+            if (midiNot >= 0 && notAv > 0)
+            {
+                notAv -= n;
+                if (notAv <= 0) { midi.addEvent (juce::MidiMessage::noteOff (16, midiNot), n - 1); midiNot = -1; }
+            }
+        }
+        else if (midiStartat)
+        {
+            if (midiNot >= 0) midi.addEvent (juce::MidiMessage::noteOff (16, midiNot), 0);
+            midiNot = -1; midiStartat = false; senasteDelId = -1;
+        }
+    }
 
     const int k = kanal();
     const int r = roll();
@@ -263,8 +334,36 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     }
 
     const bool styr = play && r < motor::NUM_ROLL;
+    // ---- pump: hur mycket varje roll trycks ner av kicken
+    static const float pumpRoll[] = { 0.0f, 1.0f, 0.25f, 0.35f, 0.8f, 0.7f, 0.5f, 0.55f };
+    int kickKanal = -1;
+    for (int i = 0; i < ledning::kKanaler; ++i)
+        if (nav.kanal[i].roll.load() == motor::KICK && ledning::levande (nav.kanal[i].senast.load(), nu)) { kickKanal = i; break; }
+    if (r == motor::KICK) kickKanal = k;
+    const float pump = r < motor::NUM_ROLL ? v[20] * pumpRoll[r] : 0.0f;
+    const float pumpTid = 0.12f + v[21] * 0.7f;
+    const float kickDjup = kickKanal >= 0 ? juce::jlimit (0.0f, 1.0f, v[11] * v[12 + kickKanal]) : 0.0f;
+
     fack.kor (L, R, n, ppq, slagPerSampel, styr, djup, 1.0f,
-              [&] (double s) { return motor::atgard (plan, in, ov, k, r, s, slagPerTakt); });
+              [&] (double s)
+              {
+                  auto a = motor::atgard (plan, in, ov, k, r, s, slagPerTakt);
+                  if (pump > 0.0f)
+                  {
+                      // pumpar bara när kicken faktiskt spelar enligt motorn
+                      float kickPa = 1.0f;
+                      if (kickKanal >= 0)
+                      {
+                          const auto ka = motor::atgard (plan, in, ov, kickKanal, motor::KICK, std::floor (s) + 0.01, slagPerTakt);
+                          const int steg = (int) std::fmod (std::floor (std::floor (s) * 4.0), 16.0);
+                          const float pa = ka.niva * (((ka.grind >> steg) & 1u) ? 1.0f : 0.0f) * (1.0f - ka.hp);
+                          kickPa = 1.0f + (pa - 1.0f) * kickDjup;
+                      }
+                      a.pump = pump * kickPa;
+                      a.pumpTid = pumpTid;
+                  }
+                  return a;
+              });
 
     // ---- rapportera till CENTRAL
     auto& kn = nav.kanal[k];

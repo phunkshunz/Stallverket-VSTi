@@ -26,6 +26,9 @@ CENTRAL behandlar också ljudet på sin egen kanal, så den kan ligga på t.ex. 
 - **FRÖ** + **SLUMPA**: samma mall och känsla, en helt ny låt. **SLUMPA ALLT** slumpar allt.
 - **FORM**: EVIG (bygger vidare i timmar utan att upprepa sig) eller 64/128/192/256 takter som börjar om efter OUTRO.
 - **ENERGI** (färre breaks, fler klimax) · **VARIATION** (hur ofta element kommer och går) · **BRYTDJUP** (hur mycket som försvinner i breaken) · **BYGGLÄNGD** · **STÖK** (stutter, trumrullar, fills) · **FILTER** (hur mycket filtren rör sig) · **ANDAS** (tystnad sista slaget innan droppet) · **DUBKAST** (eko som ringer vidare) · **DJUP** (hur mycket motorn styr totalt).
+- **PUMP** + **PUMPTID**: kicken pumpar bas, synt, atmo och de andra kanalerna, utan någon sidechain-routing. Pumpen följer motorn: tystnar kicken i breaket, slutar det pumpa.
+- **MIDI UT**: CENTRAL skickar MIDI på kanal 16 när en ny del börjar. Not C1 = INTRO, C#1 = GROOVE, D1 = LYFT, D#1 = BREAK, E1 = BYGG, F1 = DROP, F#1 = KLIMAX, G1 = UTANDNING, G#1 = OUTRO. CC 20 = delens nummer, CC 21 = energi. I Bitwig: lägg en *Note Receiver* på ett annat spår och välj STÄLLVERKET som källa, så kan du byta scener eller mönster i BETONG/KOLV när låten byter del.
+- **Controller**: BREAK NU, BYGG NU, DROP NU, HÅLL och SLÄPP finns som parametrar. Mappa dem till knappar på din controller i Bitwig.
 - Liten ratt per kanal: hur mycket motorn får styra just den kanalen.
 - **BREAK NU / BYGG NU / DROP NU**: ta över från nästa takt. **HÅLL**: loopa delen som spelar nu. **SLÄPP**: motorn kör vidare själv.
 - Tidslinjen visar delarna och vad varje kanal gör de kommande 56 takterna.

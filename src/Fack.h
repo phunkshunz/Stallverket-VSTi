@@ -178,8 +178,20 @@ public:
             eko[(size_t) ekoSkriv * 2 + 1] = xR * dub + ekoLp[1] * 0.55f;
             if (++ekoSkriv >= ekoLen) ekoSkriv = 0;
 
-            float oL = xL * gain + eL;
-            float oR = xR * gain + eR;
+            // ---- pump: kicken trycker ner kanalen på varje slag (ingen routing, följer takten)
+            float pumpG = 1.0f;
+            if (a.pump > 0.0f && spelar)
+            {
+                const double fas = slag - std::floor (slag);
+                const double x = fas / std::max (0.05, (double) a.pumpTid);
+                double duck = x >= 1.0 ? 0.0 : (1.0 - x) * (1.0 - x);
+                duck *= std::min (1.0, fas / 0.012);                 // snabb attack, inget klick
+                pumpG = 1.0f - a.pump * d * (float) duck;
+            }
+            pumpN += 0.35f * (pumpG - pumpN);
+
+            float oL = xL * gain * pumpN + eL;
+            float oR = xR * gain * pumpN + eR;
 
             // mix: hur mycket av maskinen som hörs mot originalet
             L[i] = inL + (oL - inL) * mix;
@@ -200,7 +212,7 @@ private:
     std::vector<float> ring, eko;
     int ringLen = 0, ekoLen = 0, skriv = 0, ekoSkriv = 0;
     Svf lp, hp;
-    float gain = 1, lpN = 1, hpN = 0, ekoLp[2] {};
+    float gain = 1, lpN = 1, hpN = 0, pumpN = 1, ekoLp[2] {};
     bool stutterAktiv = false, bakAktiv = false;
     float stutterLangd = 0;
     double stutterBit = 0;

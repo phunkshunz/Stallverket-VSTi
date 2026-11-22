@@ -28,18 +28,20 @@ int main (int argc, char** argv)
     juce::AudioBuffer<float> buf (2, 512);
     juce::MidiBuffer m;
     juce::Random rnd (1);
-    double maxv = 0; int64_t nan = 0;
+    double maxv = 0; int64_t nan = 0, midiN = 0;
     for (int blk = 0; blk < 48000 * 60 * 3 / 512; ++blk)   // 3 minuter
     {
         for (auto* p : { &a, &b, &c })
         {
             for (int ch = 0; ch < 2; ++ch) for (int i = 0; i < 512; ++i) buf.setSample (ch, i, (rnd.nextFloat() - 0.5f) * 0.5f);
+            m.clear();
             p->processBlock (buf, m);
+            if (p == &a) midiN += m.getNumEvents();
             for (int ch = 0; ch < 2; ++ch) for (int i = 0; i < 512; ++i) { float v = buf.getSample (ch, i); if (! std::isfinite (v)) ++nan; maxv = std::max (maxv, (double) std::abs (v)); }
         }
         ph.ppq += 512.0 * 130.0 / 60.0 / 48000.0;
     }
-    std::printf ("NaN: %lld  max: %.3f  följer b mall=%d\n", (long long) nan, maxv, b.installning().mall);
+    std::printf ("NaN: %lld  max: %.3f  följer b mall=%d  MIDI-händelser: %lld\n", (long long) nan, maxv, b.installning().mall, (long long) midiN);
     a.taOver (motor::BYGG);
 
     for (auto* p : { &a, &b })

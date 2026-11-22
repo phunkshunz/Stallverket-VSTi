@@ -100,6 +100,13 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     andas.attach (proc.state, "andas", "ANDAS");
     dub.attach (proc.state, "dub", "DUBKAST");
     djup.attach (proc.state, "djup", "DJUP");
+    pump.attach (proc.state, "pump", "PUMP");
+    pumptid.attach (proc.state, "pumptid", "PUMPTID");
+    pump.slider.setTooltip (utf8 ("Kicken pumpar de andra kanalerna, utan routing. Följer motorn: ingen kick, ingen pump."));
+    pumptid.slider.setTooltip (utf8 ("Hur länge pumpen håller i sig efter varje slag."));
+    midiKnapp.setClickingTogglesState (true);
+    midiKnapp.setTooltip (utf8 ("Skickar MIDI på kanal 16 när en ny del börjar: not C1 + del, CC 20 = del, CC 21 = energi. Byt scener i Bitwig eller mönster i andra maskiner."));
+    midiAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.state, "midiut", midiKnapp);
     for (int i = 0; i < ledning::kKanaler; ++i)
     {
         kanalDjup[i].setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
@@ -121,7 +128,7 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     for (auto* c : std::initializer_list<juce::Component*> { &centralKnapp, &kanalVal, &rollVal, &mallVal, &formVal, &presetVal,
                                                              &presetFore, &presetNasta, &sparaKnapp, &slumpaFro, &slumpaAllt,
                                                              &breakNu, &byggNu, &dropNu, &hallKnapp, &slappKnapp, &sprakKnapp,
-                                                             &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup })
+                                                             &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &midiKnapp })
         addChildComponent (c);
     for (auto& k : kanalDjup) addChildComponent (k);
     addChildComponent (om);
@@ -169,7 +176,7 @@ void StallverketEditor::byggLayout()
 
     for (auto* c : std::initializer_list<juce::Component*> { &mallVal, &formVal, &presetVal, &presetFore, &presetNasta, &sparaKnapp,
                                                              &slumpaFro, &slumpaAllt, &breakNu, &byggNu, &dropNu, &hallKnapp, &slappKnapp,
-                                                             &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup })
+                                                             &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &midiKnapp })
         c->setVisible (centralVy);
     for (auto& k : kanalDjup) k.setVisible (centralVy);
     for (auto* c : std::initializer_list<juce::Component*> { &centralKnapp, &kanalVal, &rollVal, &sprakKnapp }) c->setVisible (true);
@@ -256,13 +263,15 @@ void StallverketEditor::resized()
     slumpaFro.setBounds (valRad.removeFromLeft (80));
     valRad.removeFromLeft (6);
     slumpaAllt.setBounds (valRad.removeFromLeft (110));
+    valRad.removeFromLeft (6);
+    midiKnapp.setBounds (valRad.removeFromLeft (80));
 
     botten.removeFromTop (8);
-    Knob* rattar[] = { &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup };
-    const int kb = botten.getWidth() / 5;
+    Knob* rattar[] = { &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &pump, &pumptid, &djup };
+    const int kb = botten.getWidth() / 6;
     auto rad1 = botten.removeFromTop (botten.getHeight() / 2);
-    for (int i = 0; i < 5; ++i) rattar[i]->setBounds (rad1.removeFromLeft (kb).reduced (6, 0));
-    for (int i = 5; i < 10; ++i) rattar[i]->setBounds (botten.removeFromLeft (kb).reduced (6, 0));
+    for (int i = 0; i < 6; ++i) rattar[i]->setBounds (rad1.removeFromLeft (kb).reduced (4, 0));
+    for (int i = 6; i < 12; ++i) rattar[i]->setBounds (botten.removeFromLeft (kb).reduced (4, 0));
 
     knappar.removeFromLeft (10);
     const int bh = (knappar.getHeight() - 4 * 6) / 5;

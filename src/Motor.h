@@ -296,6 +296,8 @@ struct Atgard
     bool     bak     = false;   // spelar förra slaget baklänges
     float    dub     = 0.0f;    // skick till ekot
     bool     hard    = false;   // hårt klipp i stället för mjuk övergång
+    float    pump    = 0.0f;    // sidechain-pump från kicken, 0..1
+    float    pumpTid = 0.4f;    // pumpens längd i slag
 };
 
 inline uint16_t grindMonster (uint32_t h, float tathet)
