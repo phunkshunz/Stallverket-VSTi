@@ -35,7 +35,7 @@ private:
     juce::TextButton breakNu { "BREAK NU" }, byggNu { "BYGG NU" }, dropNu { "DROP NU" }, hallKnapp, slappKnapp;
     sprak::Knapp sprakKnapp;
 
-    Knob fro, energi, variation, brytdjup, bygglangd, stok, filter, andas, dub, djup, pump, pumptid;
+    Knob fro, energi, variation, brytdjup, bygglangd, stok, filter, andas, dub, djup, pump, pumptid, overgang;
     juce::TextButton midiKnapp { "MIDI UT" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> midiAtt;
     juce::Slider kanalDjup[ledning::kKanaler];

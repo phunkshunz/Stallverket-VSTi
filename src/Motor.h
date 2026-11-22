@@ -20,12 +20,12 @@
 
 namespace motor
 {
-enum Roll { KICK, BAS, HATS, PERC, SYNT, ATMO, FX, LOOP, NUM_ROLL };
+enum Roll { KICK, BAS, HATS, PERC, SYNT, ATMO, FX, LOOP, CLAP, RIDE, VOX, NUM_ROLL };
 enum Del  { INTRO, GROOVE, LYFT, BREAK, BYGG, DROP, KLIMAX, UTANDNING, OUTRO, NUM_DEL };
 
 inline const char* rollNamn (int r)
 {
-    static const char* n[] = { "KICK", "BAS", "HATS", "PERC", "SYNT", "ATMO", "FX", "LOOP" };
+    static const char* n[] = { "KICK", "BAS", "HATS", "PERC", "SYNT", "ATMO", "FX", "LOOP", "CLAP", "RIDE", "VOX" };
     return (r >= 0 && r < NUM_ROLL) ? n[r] : "?";
 }
 
@@ -91,12 +91,13 @@ struct Installning
     float    filter    = 0.6f;
     float    andas     = 0.4f;
     float    dub       = 0.2f;
+    float    overgang  = 0.5f;  // övergångseffekter: tape stop, pitch-stutter, rum
 
     bool operator== (const Installning& o) const
     {
         return mall == o.mall && fro == o.fro && form == o.form && energi == o.energi && variation == o.variation
             && brytDjup == o.brytDjup && byggLangd == o.byggLangd && stok == o.stok && filter == o.filter
-            && andas == o.andas && dub == o.dub;
+            && andas == o.andas && dub == o.dub && overgang == o.overgang;
     }
     bool operator!= (const Installning& o) const { return ! (*this == o); }
 };
@@ -298,6 +299,9 @@ struct Atgard
     bool     hard    = false;   // hårt klipp i stället för mjuk övergång
     float    pump    = 0.0f;    // sidechain-pump från kicken, 0..1
     float    pumpTid = 0.4f;    // pumpens längd i slag
+    float    ton     = 1.0f;    // stutterns uppspelningshastighet (2 = en oktav upp)
+    bool     tapeStop = false;  // bandet saktar in och stannar
+    float    rum     = 0.0f;    // skick till rummet (reverb-svall)
 };
 
 inline uint16_t grindMonster (uint32_t h, float tathet)
@@ -315,8 +319,8 @@ inline uint16_t grindMonster (uint32_t h, float tathet)
 // I vilken ordning rollerna kommer in i introt (0 = först).
 inline int intrADning (int roll, bool atmoForst)
 {
-    static const int a[] = { 0, 2, 1, 3, 5, 6, 7, 4 };   // KICK BAS HATS PERC SYNT ATMO FX LOOP
-    static const int b[] = { 3, 4, 2, 5, 1, 0, 6, 2 };
+    static const int a[] = { 0, 2, 1, 3, 5, 6, 7, 4, 3, 6, 7 };   // KICK BAS HATS PERC SYNT ATMO FX LOOP CLAP RIDE VOX
+    static const int b[] = { 3, 4, 2, 5, 1, 0, 6, 2, 5, 6, 3 };
     return (atmoForst ? b : a)[roll];
 }
 
@@ -375,7 +379,7 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
         case UTANDNING:
         case LYFT:
         {
-            static const float bas[] = { 0.97f, 0.90f, 0.85f, 0.70f, 0.60f, 0.55f, 0.40f, 0.75f };
+            static const float bas[] = { 0.97f, 0.90f, 0.85f, 0.70f, 0.60f, 0.55f, 0.40f, 0.75f, 0.80f, 0.45f, 0.25f };
             float pa = bas[roll] + (in.energi - 0.5f) * 0.4f;
             pa = 1.0f - in.variation * (1.0f - pa);
             if (s.typ == LYFT) pa = std::fmax (pa, 0.85f);
@@ -415,6 +419,9 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
                 case ATMO: a.niva = 1.0f; a.dub = dub * 0.2f; break;
                 case FX:   a.niva = 0.8f; break;
                 case LOOP: a.lp = 1.0f - 0.6f * filt; a.grind = grindMonster (hk, 0.3f); break;
+                case CLAP: if (d > 0.5f) a.niva = 0.0f; else { a.lp = 1.0f - 0.4f * filt; a.dub = dub * 0.3f; } break;
+                case RIDE: a.niva = 0.0f; break;
+                case VOX:  a.niva = 1.0f; a.dub = dub * 0.35f; a.rum = in.overgang * 0.3f; break;
                 default: break;
             }
             break;
@@ -427,7 +434,7 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
             {
                 case KICK:
                     a.hp = filt * 0.7f * t2;
-                    if (stok > 0.25f && t > 0.75f) a.stutter = t > 0.94f ? 1.0f : (t > 0.87f ? 2.0f : 4.0f);
+                    if (stok > 0.25f && t > 0.75f) a.stutter = t > 0.97f ? 0.5f : (t > 0.94f ? 1.0f : (t > 0.87f ? 2.0f : 4.0f));
                     if (in.brytDjup > 0.85f && t < 0.5f) a.niva = 0.0f;
                     break;
                 case BAS:
@@ -444,8 +451,21 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
                 case SYNT:  a.lp = 0.3f + 0.7f * t; a.niva = 0.6f + 0.4f * t; break;
                 case ATMO:  a.niva = 0.5f + 0.5f * t; break;
                 case FX:    a.niva = t; break;
+                case CLAP:  // virvelrulle: 1/4 -> 1/8 -> 1/16 -> 1/32
+                    a.lp = 0.5f + 0.5f * t;
+                    if (stok > 0.1f && t > 0.4f)
+                        a.stutter = t > 0.94f ? 0.5f : (t > 0.8f ? 1.0f : (t > 0.6f ? 2.0f : 4.0f));
+                    break;
+                case RIDE:  a.niva = t > 0.5f ? (t - 0.5f) * 2.0f : 0.0f; break;
+                case VOX:   a.niva = 0.7f; a.lp = 0.5f + 0.5f * t; break;
                 default: break;
             }
+            // pitch-stutter: bitarna stiger i tonhöjd sista kvarten
+            if (a.stutter > 0.0f && t > 0.75f && roll != KICK)
+                a.ton = 1.0f + in.overgang * (t - 0.75f) * 4.0f;
+            // rum-svall in i droppet
+            if (slagKvar <= 2.0 && roll != KICK && roll != BAS)
+                a.rum = in.overgang * (float) (1.0 - slagKvar / 2.0);
             // andas: allt tyst sista slaget (eller två) innan droppet
             const bool andas = slump01 (s.h + 5) < in.andas;
             const double tystSlag = in.andas > 0.7f ? 2.0 : 1.0;
@@ -463,11 +483,13 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
         case DROP:
             if (roll == ATMO) a.niva = 0.7f;
             if (roll == FX && tid >= 1) a.niva = 0.5f;
+            if (roll == VOX && tid >= 2) a.niva = 0.0f;
             break;
 
         case KLIMAX:
             if (roll == FX)   a.grind = grindMonster (blanda (hk, (uint32_t) fras), 0.5f + in.energi * 0.4f);
             if (roll == LOOP && in.variation > 0.5f && (fras % 2) == 1) a.grind = grindMonster (blanda (hk, (uint32_t) fras, 3), 0.8f);
+            if (roll == VOX && (fras % 2) == 0) a.niva = 0.0f;
             break;
 
         default: break;
@@ -479,8 +501,8 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
         const uint32_t hf = blanda (s.h, (uint32_t) fras, 0xF111);
         if (slump01 (hf) < stok * 0.7f)
         {
-            static const int fillRoll[] = { HATS, PERC, LOOP, SYNT };
-            const int vem = fillRoll[blanda (hf + 1) % 4];
+            static const int fillRoll[] = { HATS, PERC, LOOP, SYNT, CLAP };
+            const int vem = fillRoll[blanda (hf + 1) % 5];
             if (vem == roll && kvarITakt <= 1.0) a.stutter = slump01 (hf + 2) < 0.5f ? 1.0f : 0.5f;
         }
         if (roll == KICK && slump01 (hf + 4) < stok * 0.35f && kvarITakt <= 0.5) a.niva = 0.0f;
@@ -488,13 +510,25 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
         // dubkast: en roll skickas till ekot och tystnar, ekot svarar
         if (slump01 (hf + 6) < dub * 0.8f)
         {
-            static const int dubRoll[] = { SYNT, PERC, LOOP, ATMO };
-            const int vem = dubRoll[blanda (hf + 7) % 4];
+            static const int dubRoll[] = { SYNT, PERC, LOOP, ATMO, VOX, CLAP };
+            const int vem = dubRoll[blanda (hf + 7) % 6];
             if (vem == roll && kvarITakt <= 1.0)
             {
                 a.dub = 1.0f;
                 if (kvarITakt <= 0.5) a.niva = 0.0f;
             }
+        }
+    }
+
+    // tape stop: sista slaget innan ett break (eller outro) saktar bandet in, med rum efter
+    if ((s.typ == GROOVE || s.typ == KLIMAX || s.typ == DROP || s.typ == LYFT || s.typ == UTANDNING) && slagKvar <= 1.0 && in.overgang > 0.05f)
+    {
+        int64_t ti = 0;
+        const auto nasta = aktuell (p, o, s.start + s.langd, ti);
+        if ((nasta.typ == BREAK || nasta.typ == OUTRO) && slump01 (s.h + 31) < in.overgang * (0.35f + m.hard * 0.4f))
+        {
+            if (roll != ATMO && roll != FX) a.tapeStop = true;
+            a.rum = std::fmax (a.rum, in.overgang * 0.6f);
         }
     }
 

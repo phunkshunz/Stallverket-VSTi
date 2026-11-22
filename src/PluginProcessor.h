@@ -5,6 +5,7 @@
 #include "Motor.h"
 #include "Ledning.h"
 #include "Fack.h"
+#include "Lyssna.h"
 
 // STÄLLVERKET: maskinen som alla kanaler går igenom.
 //
@@ -46,7 +47,9 @@ public:
     // ---- för panelen
     bool arCentral() const;
     int  kanal() const;     // 0..7
-    int  roll() const;      // 0..8 (8 = ORÖRD)
+    int  roll() const;      // roll som gäller (AUTO omräknad), NUM_ROLL = ORÖRD
+    int  rollVal() const;   // valet i menyn, NUM_ROLL + 1 = AUTO
+    int  autoGissning() const { return autoRoll.load(); }
     motor::Installning installning() const;   // det som gäller just nu (från CENTRAL eller sparat)
     motor::Overstyr overstyr() const;
     bool centralLever() const;
@@ -85,6 +88,8 @@ private:
 
     double sr = 48000.0;
     fack::Fack fack;
+    lyssna::Lyssnare lyssnare;
+    std::atomic<int> autoRoll { -1 };
     std::vector<float> monoBuf;
     motor::Plan plan;
     motor::Installning planFor;

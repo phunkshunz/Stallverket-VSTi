@@ -16,8 +16,8 @@
 
 namespace ledning
 {
-inline constexpr int kKanaler = 8;
-inline constexpr int kInst = 24;     // antal värden som skickas från CENTRAL
+inline constexpr int kKanaler = 16;
+inline constexpr int kInst = 32;     // antal värden som skickas från CENTRAL
 
 struct Kanal
 {
@@ -25,6 +25,7 @@ struct Kanal
     std::atomic<float>    niva { 0.0f };
     std::atomic<int64_t>  senast { 0 };      // ms, när kanalen senast hördes av
     std::atomic<int>      del { -1 };
+    std::atomic<int64_t>  ljud { 0 };        // ms, när det senast kom ljud in på kanalen
 };
 
 struct Nav

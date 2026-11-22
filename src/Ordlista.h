@@ -98,5 +98,8 @@ inline constexpr Par kOrdlista[] =
     { "Kicken pumpar de andra kanalerna, utan routing. Följer motorn: ingen kick, ingen pump.", "The kick pumps the other channels, no routing needed. Follows the engine: no kick, no pump." },
     { "Hur länge pumpen håller i sig efter varje slag.", "How long the pump holds after each beat." },
     { "Skickar MIDI på kanal 16 när en ny del börjar: not C1 + del, CC 20 = del, CC 21 = energi. Byt scener i Bitwig eller mönster i andra maskiner.", "Sends MIDI on channel 16 when a new part starts: note C1 + part, CC 20 = part, CC 21 = energy. Switch scenes in Bitwig or patterns in other machines." },
+    { "ÖVERGÅNG", "TRANSITION" },
+    { "Övergångseffekter: tape stop innan breaken, stutter som stiger i tonhöjd och rum som sväller in i droppet.", "Transition effects: tape stop before breaks, stutter that rises in pitch and a room that swells into the drop." },
+    { "LYSSNAR ...", "LISTENING ..." },
 };
 } // namespace sprak

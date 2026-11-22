@@ -3,7 +3,8 @@
 
 namespace
 {
-constexpr int kCentralB = 900, kCentralH = 560;
+constexpr int kCentralB = 920, kCentralH = 640;
+constexpr int kTidH = 380;
 constexpr int kKanalB = 540, kKanalH = 262;
 
 juce::Colour delFarg (int d)
@@ -28,6 +29,7 @@ juce::String rollText (int r)
 {
     if (r >= 0 && r < motor::NUM_ROLL) return motor::rollNamn (r);
     if (r == motor::NUM_ROLL) return sprak::trU ("ORÖRD");
+    if (r == motor::NUM_ROLL + 1) return "AUTO";
     return "-";
 }
 } // namespace
@@ -46,7 +48,7 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     centralAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.state, "central", centralKnapp);
 
     for (int i = 1; i <= ledning::kKanaler; ++i) kanalVal.addItem (utf8 ("KANAL ") + juce::String (i), i);
-    for (int i = 0; i <= motor::NUM_ROLL; ++i) rollVal.addItem (rollText (i), i + 1);
+    for (int i = 0; i <= motor::NUM_ROLL + 1; ++i) rollVal.addItem (rollText (i), i + 1);
     for (int i = 0; i < motor::kAntalMallar; ++i) mallVal.addItem (juce::String::fromUTF8 (motor::kMallar[i].namn), i + 1);
     for (int i = 0; i < motor::kAntalFormer; ++i) formVal.addItem (motor::kFormNamn[i], i + 1);
     kanalAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.state, "kanal", kanalVal);
@@ -102,6 +104,8 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     djup.attach (proc.state, "djup", "DJUP");
     pump.attach (proc.state, "pump", "PUMP");
     pumptid.attach (proc.state, "pumptid", "PUMPTID");
+    overgang.attach (proc.state, "overgang", utf8 ("ÖVERGÅNG"));
+    overgang.slider.setTooltip (utf8 ("Övergångseffekter: tape stop innan breaken, stutter som stiger i tonhöjd och rum som sväller in i droppet."));
     pump.slider.setTooltip (utf8 ("Kicken pumpar de andra kanalerna, utan routing. Följer motorn: ingen kick, ingen pump."));
     pumptid.slider.setTooltip (utf8 ("Hur länge pumpen håller i sig efter varje slag."));
     midiKnapp.setClickingTogglesState (true);
@@ -128,7 +132,7 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     for (auto* c : std::initializer_list<juce::Component*> { &centralKnapp, &kanalVal, &rollVal, &mallVal, &formVal, &presetVal,
                                                              &presetFore, &presetNasta, &sparaKnapp, &slumpaFro, &slumpaAllt,
                                                              &breakNu, &byggNu, &dropNu, &hallKnapp, &slappKnapp, &sprakKnapp,
-                                                             &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &midiKnapp })
+                                                             &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &overgang, &midiKnapp })
         addChildComponent (c);
     for (auto& k : kanalDjup) addChildComponent (k);
     addChildComponent (om);
@@ -176,13 +180,13 @@ void StallverketEditor::byggLayout()
 
     for (auto* c : std::initializer_list<juce::Component*> { &mallVal, &formVal, &presetVal, &presetFore, &presetNasta, &sparaKnapp,
                                                              &slumpaFro, &slumpaAllt, &breakNu, &byggNu, &dropNu, &hallKnapp, &slappKnapp,
-                                                             &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &midiKnapp })
+                                                             &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &overgang, &midiKnapp })
         c->setVisible (centralVy);
     for (auto& k : kanalDjup) k.setVisible (centralVy);
     for (auto* c : std::initializer_list<juce::Component*> { &centralKnapp, &kanalVal, &rollVal, &sprakKnapp }) c->setVisible (true);
 
     // översätt texterna (rollnamn m.m.)
-    for (int i = 0; i <= motor::NUM_ROLL; ++i) rollVal.changeItemText (i + 1, rollText (i));
+    for (int i = 0; i <= motor::NUM_ROLL + 1; ++i) rollVal.changeItemText (i + 1, rollText (i));
     for (int i = 1; i <= ledning::kKanaler; ++i) kanalVal.changeItemText (i, sprak::trU ("KANAL ") + juce::String (i));
     centralKnapp.setButtonText ("CENTRAL");
     for (auto* b : { &breakNu, &byggNu, &dropNu, &sparaKnapp, &slumpaFro, &slumpaAllt })
@@ -239,7 +243,7 @@ void StallverketEditor::resized()
     }
 
     // ---- tidslinjen med kanalerna
-    tidYta = r.removeFromTop (300);
+    tidYta = r.removeFromTop (kTidH);
     {
         auto rader = tidYta.reduced (8).withTrimmedTop (44);
         const int radH = rader.getHeight() / ledning::kKanaler;
@@ -267,11 +271,11 @@ void StallverketEditor::resized()
     midiKnapp.setBounds (valRad.removeFromLeft (80));
 
     botten.removeFromTop (8);
-    Knob* rattar[] = { &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &pump, &pumptid, &djup };
-    const int kb = botten.getWidth() / 6;
+    Knob* rattar[] = { &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &overgang, &pump, &pumptid, &djup };
+    const int kb = botten.getWidth() / 7;
     auto rad1 = botten.removeFromTop (botten.getHeight() / 2);
-    for (int i = 0; i < 6; ++i) rattar[i]->setBounds (rad1.removeFromLeft (kb).reduced (4, 0));
-    for (int i = 6; i < 12; ++i) rattar[i]->setBounds (botten.removeFromLeft (kb).reduced (4, 0));
+    for (int i = 0; i < 7; ++i) rattar[i]->setBounds (rad1.removeFromLeft (kb).reduced (2, 0));
+    for (int i = 7; i < 13; ++i) rattar[i]->setBounds (botten.removeFromLeft (kb).reduced (2, 0));
 
     knappar.removeFromLeft (10);
     const int bh = (knappar.getHeight() - 4 * 6) / 5;
@@ -299,7 +303,7 @@ void StallverketEditor::paint (juce::Graphics& g)
     {
         ritaTidslinje (g, tidYta);
         auto b = getLocalBounds().reduced (10, 8);
-        b.removeFromTop (30 + 8 + 300 + 8);
+        b.removeFromTop (30 + 8 + kTidH + 8);
         auto knappYta = b.removeFromRight (190);
         drawPanel (g, b.withTrimmedTop (34).expanded (0, 2), "");
         juce::ignoreUnused (knappYta);
@@ -388,11 +392,12 @@ void StallverketEditor::ritaTidslinje (juce::Graphics& g, juce::Rectangle<int> y
     {
         auto rad = r.removeFromTop (radH).reduced (0, 1);
         const bool lever = ledning::levande (nav.kanal[k].senast.load(), nu) && nav.kanal[k].roll.load() >= 0;
+        const bool tyst = lever && ! ledning::levande (nav.kanal[k].ljud.load(), nu, 3000);
         const int rl = lever ? nav.kanal[k].roll.load() : -1;
         auto namn = rad.withWidth (vansterB - 36);
 
-        g.setColour (lever ? text : muted.withAlpha (0.5f));
-        g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
+        g.setColour (lever ? (tyst ? muted : text) : muted.withAlpha (0.5f));
+        g.setFont (juce::FontOptions (juce::jmin (10.0f, (float) radH * 0.6f), juce::Font::bold));
         g.drawText (juce::String (k + 1) + "  " + (lever ? rollText (rl) : juce::String ("-")), namn.withTrimmedLeft (10), juce::Justification::centredLeft);
 
         // nivålampa
@@ -456,7 +461,10 @@ void StallverketEditor::ritaKanalvy (juce::Graphics& g, juce::Rectangle<int> yta
     g.drawText (proc.spelarNu() ? sprak::trU (motor::delNamn (s.typ)) : sprak::trU ("STOPP"), delText.removeFromTop (40), juce::Justification::centredLeft);
     g.setColour (muted);
     g.setFont (juce::FontOptions (11.0f));
-    g.drawText (sprak::trU ("TAKT ") + juce::String (tid + 1) + sprak::trU (" AV ") + juce::String (s.langd) + "   ·   " + rollText (rl),
+    const juce::String rollStr = proc.rollVal() == motor::NUM_ROLL + 1
+        ? juce::String ("AUTO: ") + (proc.autoGissning() >= 0 ? rollText (proc.autoGissning()) : sprak::trU ("LYSSNAR ..."))
+        : rollText (rl);
+    g.drawText (sprak::trU ("TAKT ") + juce::String (tid + 1) + sprak::trU (" AV ") + juce::String (s.langd) + "   ·   " + rollStr,
                 delText, juce::Justification::centredLeft);
 
     // mätare: nivå, lågpass, högpass

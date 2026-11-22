@@ -46,6 +46,51 @@ struct Svf
     }
 };
 
+// Litet rum (Schroeder): fyra kamfilter och två allpass per sida. Inget brus, bara svans.
+struct Rum
+{
+    std::vector<float> kam[8], ap[4];
+    int kPos[8] {}, aPos[4] {};
+    float damp[8] {};
+
+    void forbered (float sr)
+    {
+        static const int kl[] = { 1116, 1188, 1277, 1356 };
+        static const int al[] = { 556, 441 };
+        const float f = sr / 44100.0f;
+        for (int i = 0; i < 8; ++i) { kam[i].assign ((size_t) ((kl[i % 4] + (i >= 4 ? 23 : 0)) * f), 0.0f); kPos[i] = 0; damp[i] = 0; }
+        for (int i = 0; i < 4; ++i) { ap[i].assign ((size_t) ((al[i % 2] + (i >= 2 ? 23 : 0)) * f), 0.0f); aPos[i] = 0; }
+    }
+
+    float hpLp[2] {};
+
+    inline float sida (float x, int c)
+    {
+        // högpass in i rummet, så låga frekvenser inte byggs upp i svansen
+        hpLp[c] += 0.03f * (x - hpLp[c]);
+        x -= hpLp[c];
+        float ut = 0.0f;
+        for (int i = c * 4; i < c * 4 + 4; ++i)
+        {
+            auto& b = kam[i];
+            const float y = b[(size_t) kPos[i]];
+            damp[i] = y * 0.6f + damp[i] * 0.4f;
+            b[(size_t) kPos[i]] = x + damp[i] * 0.8f;
+            if (++kPos[i] >= (int) b.size()) kPos[i] = 0;
+            ut += y;
+        }
+        for (int i = c * 2; i < c * 2 + 2; ++i)
+        {
+            auto& b = ap[i];
+            const float bv = b[(size_t) aPos[i]];
+            b[(size_t) aPos[i]] = ut + bv * 0.5f;
+            ut = bv - ut;
+            if (++aPos[i] >= (int) b.size()) aPos[i] = 0;
+        }
+        return ut * 0.1f;
+    }
+};
+
 class Fack
 {
 public:
@@ -62,6 +107,8 @@ public:
         stutterAktiv = false; bakAktiv = false;
         lp.satt (20000.0f, sr); hp.satt (20.0f, sr);
         raknare = 0;
+        rum.forbered (sr);
+        tapeAktiv = false; rumN = 0;
     }
 
     // Kör ett block. slag0 = position i slag vid första samplet, slagPerSampel = tempo.
@@ -132,15 +179,21 @@ public:
                 if (bitIndex > stutterBit)
                 {
                     const int fas = (int) ((slag - bitIndex * bit) * sampelPerSlag) % bitLen;
-                    int las = ankare + fas;
-                    las = ((las % ringLen) + ringLen) % ringLen;
+                    // ton > 1: biten spelas snabbare och upprepas inom sig själv, så den stiger i tonhöjd
+                    const double tonFas = std::fmod ((double) fas * std::max (1.0f, a.ton), (double) bitLen);
                     // korta övertoningar i bitarnas kanter, så det inte klickar
                     const int kant = std::min (bitLen / 4, (int) (sr * 0.002f));
                     float env = 1.0f;
                     if (fas < kant) env = (float) fas / (float) kant;
                     else if (fas > bitLen - kant) env = (float) (bitLen - fas) / (float) kant;
-                    xL = ring[(size_t) las * 2] * env;
-                    xR = ring[(size_t) las * 2 + 1] * env;
+                    if (a.ton > 1.0f)
+                    {
+                        const double tf = tonFas;
+                        if (tf < kant) env *= (float) (tf / kant);
+                        else if (tf > bitLen - kant) env *= (float) ((bitLen - tf) / kant);
+                    }
+                    lasRing ((double) ankare + tonFas, xL, xR);
+                    xL *= env; xR *= env;
                 }
             }
             else stutterAktiv = false;
@@ -159,6 +212,21 @@ public:
                 ++bakN;
             }
             else bakAktiv = false;
+
+            // ---- tape stop: bandet saktar in under slaget och stannar
+            if (d > 0.5f && a.tapeStop)
+            {
+                if (! tapeAktiv) { tapeAktiv = true; tapeAnkare = skriv; tapePos = 0.0; tapeN = 0; }
+                const double len = std::max (64.0, sampelPerSlag);
+                const double fas = std::min (1.0, (double) tapeN / len);
+                const double fart = 1.0 - fas;                       // 1 -> 0
+                tapePos += fart * fart * 0.5 + fart * 0.5;           // tappar fart mjukt
+                lasRing ((double) tapeAnkare + tapePos, xL, xR);
+                const float env = (float) std::min (1.0, (1.0 - fas) * 8.0);   // tona ut sista biten
+                xL *= env; xR *= env;
+                ++tapeN;
+            }
+            else tapeAktiv = false;
 
             // ---- filter: lågpass, sedan högpass
             float skrap, hpL, hpR;
@@ -190,8 +258,18 @@ public:
             }
             pumpN += 0.35f * (pumpG - pumpN);
 
-            float oL = xL * gain * pumpN + eL;
-            float oR = xR * gain * pumpN + eR;
+            // ---- rum: skickas före nivån, svansen ringer vidare in i nästa del
+            rumN += 0.002f * (a.rum * d - rumN);
+            float rL = 0.0f, rR = 0.0f;
+            if (rumN > 0.0005f || rumSvans > 0)
+            {
+                rL = rum.sida (xL * rumN, 0);
+                rR = rum.sida (xR * rumN, 1);
+                rumSvans = rumN > 0.0005f ? (int) (sr * 4.0f) : rumSvans - 1;
+            }
+
+            float oL = xL * gain * pumpN + eL + rL;
+            float oR = xR * gain * pumpN + eR + rR;
 
             // mix: hur mycket av maskinen som hörs mot originalet
             L[i] = inL + (oL - inL) * mix;
@@ -200,6 +278,17 @@ public:
             topp = std::max (topp * 0.99995f, std::max (std::abs (L[i]), std::abs (R[i])));
             if (++skriv >= ringLen) skriv = 0;
         }
+    }
+
+    inline void lasRing (double pos, float& l, float& r) const
+    {
+        double p = std::fmod (pos, (double) ringLen);
+        if (p < 0) p += ringLen;
+        const int i0 = (int) p;
+        const int i1 = (i0 + 1) % ringLen;
+        const float fr = (float) (p - i0);
+        l = ring[(size_t) i0 * 2] + (ring[(size_t) i1 * 2] - ring[(size_t) i0 * 2]) * fr;
+        r = ring[(size_t) i0 * 2 + 1] + (ring[(size_t) i1 * 2 + 1] - ring[(size_t) i0 * 2 + 1]) * fr;
     }
 
     float nivaMatare() const { return topp; }
@@ -213,6 +302,12 @@ private:
     int ringLen = 0, ekoLen = 0, skriv = 0, ekoSkriv = 0;
     Svf lp, hp;
     float gain = 1, lpN = 1, hpN = 0, pumpN = 1, ekoLp[2] {};
+    Rum rum;
+    float rumN = 0;
+    int rumSvans = 0;
+    bool tapeAktiv = false;
+    int tapeAnkare = 0, tapeN = 0;
+    double tapePos = 0;
     bool stutterAktiv = false, bakAktiv = false;
     float stutterLangd = 0;
     double stutterBit = 0;
