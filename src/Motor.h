@@ -93,14 +93,44 @@ struct Installning
     float    dub       = 0.2f;
     float    overgang  = 0.5f;  // övergångseffekter: tape stop, pitch-stutter, rum
 
+    // EGEN mall (mall == kAntalMallar) från mallredigeraren
+    Mall     egen = kMallar[0];
+
+    // energikurva över hela setet: åtta punkter utspridda över kurvTakter
+    bool     kurvaPa   = false;
+    int      kurvTakter = 512;
+    float    kurva[8]  { 0.3f, 0.45f, 0.6f, 0.7f, 0.85f, 1.0f, 0.7f, 0.4f };
+
+    uint32_t extra = 0;         // hash av egen mall + kurva, så att jämförelsen nedan märker ändringar
+
     bool operator== (const Installning& o) const
     {
         return mall == o.mall && fro == o.fro && form == o.form && energi == o.energi && variation == o.variation
             && brytDjup == o.brytDjup && byggLangd == o.byggLangd && stok == o.stok && filter == o.filter
-            && andas == o.andas && dub == o.dub && overgang == o.overgang;
+            && andas == o.andas && dub == o.dub && overgang == o.overgang && extra == o.extra;
     }
     bool operator!= (const Installning& o) const { return ! (*this == o); }
 };
+
+inline const Mall& mallFor (const Installning& in)
+{
+    if (in.mall == kAntalMallar) return in.egen;
+    return kMallar[(in.mall >= 0 && in.mall < kAntalMallar) ? in.mall : 0];
+}
+
+// Energin i en viss takt: ENERGI-ratten, eller energikurvan om den är på.
+inline float energiVid (const Installning& in, int64_t takt)
+{
+    if (! in.kurvaPa || in.kurvTakter <= 0) return in.energi;
+    if (takt < 0) takt = 0;
+    const double pos = (double) (takt % in.kurvTakter) / (double) in.kurvTakter * 7.0;
+    const int i = (int) pos;
+    const float f = (float) (pos - i);
+    const float a = in.kurva[i], b = in.kurva[i < 7 ? i + 1 : 7];
+    // mjuk kurva mellan punkterna
+    const float s = f * f * (3.0f - 2.0f * f);
+    return a + (b - a) * s;
+}
 
 inline constexpr int kFormTakter[] = { 0, 64, 128, 192, 256 };
 inline constexpr const char* kFormNamn[] = { "EVIG", "64 TAKTER", "128 TAKTER", "192 TAKTER", "256 TAKTER" };
@@ -149,17 +179,22 @@ inline int tvapotens (float x, int lo, int hi)
 inline Plan byggPlan (const Installning& in)
 {
     Plan p;
-    const Mall& m = kMallar[(in.mall >= 0 && in.mall < kAntalMallar) ? in.mall : 0];
+    const Mall& m = mallFor (in);
     const int formTakter = kFormTakter[(in.form >= 0 && in.form < kAntalFormer) ? in.form : 0];
     p.form = formTakter > 0;
 
     uint32_t r = blanda (in.fro + 17U, (uint32_t) in.mall + 101U);
     auto nasta = [&r] { r = blanda (r + 0x6d2b79f5U); return (float) (r & 0xffffff) / 16777216.0f; };
 
-    const float e = in.energi;
-    const float pBreak  = m.pBreak  * (1.5f - e);
-    const float pKlimax = m.pKlimax * (0.5f + e);
-    const float pUtand  = m.pUtandning * (1.5f - e);
+    float e = in.energi, pBreak = 0, pKlimax = 0, pUtand = 0;
+    auto uppdateraEnergi = [&] (int64_t takt)
+    {
+        e = energiVid (in, takt);
+        pBreak  = m.pBreak  * (1.5f - e);
+        pKlimax = m.pKlimax * (0.5f + e);
+        pUtand  = m.pUtandning * (1.5f - e);
+    };
+    uppdateraEnergi (0);
 
     // korta former: kortare delar, så att låten hinner gå igenom flera delar
     const float skala = p.form ? std::fmax (0.25f, std::fmin (1.0f, (float) formTakter / 256.0f)) : 1.0f;
@@ -193,6 +228,7 @@ inline Plan byggPlan (const Installning& in)
     {
         if (p.form && p.takter >= formTakter - outro) break;
 
+        uppdateraEnergi (p.takter);
         int nx = GROOVE;
         const float x = nasta();
         switch (cur)
@@ -335,7 +371,7 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
     if (slagPerTakt < 1) slagPerTakt = 4;
     if (slag < 0) slag = 0;
 
-    const Mall& m = kMallar[(in.mall >= 0 && in.mall < kAntalMallar) ? in.mall : 0];
+    const Mall& m = mallFor (in);
     const int64_t takt = (int64_t) std::floor (slag / slagPerTakt);
     int64_t tid = 0;
     const Sektion s = aktuell (p, o, takt, tid);
@@ -380,7 +416,7 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
         case LYFT:
         {
             static const float bas[] = { 0.97f, 0.90f, 0.85f, 0.70f, 0.60f, 0.55f, 0.40f, 0.75f, 0.80f, 0.45f, 0.25f };
-            float pa = bas[roll] + (in.energi - 0.5f) * 0.4f;
+            float pa = bas[roll] + (energiVid (in, takt) - 0.5f) * 0.4f;
             pa = 1.0f - in.variation * (1.0f - pa);
             if (s.typ == LYFT) pa = std::fmax (pa, 0.85f);
             const uint32_t hf = blanda (hk, (uint32_t) fras, 77);
@@ -487,7 +523,7 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
             break;
 
         case KLIMAX:
-            if (roll == FX)   a.grind = grindMonster (blanda (hk, (uint32_t) fras), 0.5f + in.energi * 0.4f);
+            if (roll == FX)   a.grind = grindMonster (blanda (hk, (uint32_t) fras), 0.5f + energiVid (in, takt) * 0.4f);
             if (roll == LOOP && in.variation > 0.5f && (fras % 2) == 1) a.grind = grindMonster (blanda (hk, (uint32_t) fras, 3), 0.8f);
             if (roll == VOX && (fras % 2) == 0) a.niva = 0.0f;
             break;

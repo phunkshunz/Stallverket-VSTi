@@ -1,2 +1,6 @@
 build/
 .DS_Store
+
+# licensnycklar får aldrig hamna i repot
+*licensnycklar*
+*.keys.txt

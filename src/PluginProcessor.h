@@ -80,6 +80,14 @@ public:
     bool laddaPresetFil (const juce::File& f);
     juce::String presetNamn() const { return aktivtPresetNamn; }
 
+    // ---- mallar och export
+    void kopieraMallTillEgen();
+    juce::File mallMapp() const;
+    juce::Array<juce::File> egnaMallar() const;
+    bool sparaMall (const juce::String& namn);
+    bool laddaMall (const juce::File& f);
+    juce::File exporteraMidi();
+
 private:
     void satt (const juce::String& id, float verkligt);
     float las (const char* id) const;

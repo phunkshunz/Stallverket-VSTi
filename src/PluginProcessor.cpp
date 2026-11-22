@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "Presets.h"
+#include "Licens.h"
 
 namespace
 {
@@ -9,8 +10,14 @@ const char* const kInstId[] = { "mall", "fro", "form", "energi", "variation", "b
                                 "stok", "filter", "andas", "dub", "djup",
                                 "djup1", "djup2", "djup3", "djup4", "djup5", "djup6", "djup7", "djup8",
                                 "djup9", "djup10", "djup11", "djup12", "djup13", "djup14", "djup15", "djup16",
-                                "pump", "pumptid", "overgang" };
-constexpr int kAntalInst = 31;
+                                "pump", "pumptid", "overgang",
+                                "kurva", "kurvalangd", "k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8",
+                                "e_in", "e_gr", "e_ly", "e_br", "e_by", "e_dr", "e_kl", "e_ut", "e_ou",
+                                "e_plyft", "e_pbreak", "e_pbygg", "e_pdrop", "e_pklimax", "e_putand",
+                                "e_hard", "e_stok", "e_dub", "e_filter", "e_atmo" };
+constexpr int kAntalInst = 61;
+constexpr int kIKurva = 31, kIEgen = 41;
+constexpr int kKurvTakter[] = { 128, 256, 512, 1024, 2048 };
 constexpr int kIPump = 28, kIPumpTid = 29, kIOvergang = 30;
 constexpr int kRollOrord = motor::NUM_ROLL, kRollAuto = motor::NUM_ROLL + 1;
 static_assert (kAntalInst <= ledning::kInst, "för många inställningar");
@@ -45,6 +52,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout StallverketProcessor::skapaP
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { "roll", 1 }, "Roll", rollLista(), kRollAuto));
 
     StringArray mallar; for (const auto& m : motor::kMallar) mallar.add (String::fromUTF8 (m.namn));
+    mallar.add ("EGEN");
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { "mall", 1 }, "Mall", mallar, 0));
     p.push_back (std::make_unique<AudioParameterInt> (ParameterID { "fro", 1 }, String::fromUTF8 ("Frö"), 1, 9999, 1));
     StringArray former; for (auto* f : motor::kFormNamn) former.add (f);
@@ -62,6 +70,30 @@ juce::AudioProcessorValueTreeState::ParameterLayout StallverketProcessor::skapaP
     knapp ("pump",      "Pump",      0.35f);
     knapp ("pumptid",   "Pumptid",   0.4f);
     knapp ("overgang",  "Övergång",  0.5f);
+
+    // energikurva
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "kurva", 1 }, "Kurva", false));
+    p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { "kurvalangd", 1 }, String::fromUTF8 ("Kurvlängd"),
+                                                          StringArray { "128", "256", "512", "1024", "2048" }, 2));
+    const float kurvDef[] = { 0.3f, 0.45f, 0.6f, 0.7f, 0.85f, 1.0f, 0.7f, 0.4f };
+    for (int i = 0; i < 8; ++i)
+        knapp (("k" + String (i + 1)).toRawUTF8(), ("Kurva " + String (i + 1)).toRawUTF8(), kurvDef[i]);
+
+    // EGEN mall (börjar som KLASSISK)
+    const auto& kl = motor::kMallar[0];
+    const char* langdId[] = { "e_in", "e_gr", "e_ly", "e_br", "e_by", "e_dr", "e_kl", "e_ut", "e_ou" };
+    for (int d = 0; d < motor::NUM_DEL; ++d)
+    {
+        int idx = 0; while (idx < 4 && (4 << idx) < kl.langd[d]) ++idx;
+        p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { langdId[d], 1 }, String ("Egen ") + motor::delNamn (d),
+                                                              StringArray { "4", "8", "16", "32", "64" }, idx));
+    }
+    knapp ("e_plyft", "Egen lyft", kl.pLyft);     knapp ("e_pbreak", "Egen break", kl.pBreak);
+    knapp ("e_pbygg", "Egen bygg", kl.pByggDirekt); knapp ("e_pdrop", "Egen drop", kl.pDropDirekt);
+    knapp ("e_pklimax", "Egen klimax", kl.pKlimax); knapp ("e_putand", "Egen utandning", kl.pUtandning);
+    knapp ("e_hard", "Egen hårdhet", kl.hard);     knapp ("e_stok", "Egen stök", kl.stok);
+    knapp ("e_dub", "Egen dub", kl.dub);            knapp ("e_filter", "Egen filter", kl.filter);
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "e_atmo", 1 }, "Egen atmo först", false));
     // knappar som går att mappa till en controller (reagerar när de slås på)
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "breaknu", 1 }, "Break nu", false));
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "byggnu", 1 },  "Bygg nu", false));
@@ -87,6 +119,11 @@ StallverketProcessor::StallverketProcessor()
 {
     minId = (uint32_t) juce::Random::getSystemRandom().nextInt (0x7fffffff) | 1u;
     lasInstallning (cache);
+   #if STALLVERKET_TEST_UNLOCKED
+    licens::upplast().store (true);   // bara testprogrammet, aldrig det som säljs
+   #else
+    licens::kontrollera();
+   #endif
 }
 
 StallverketProcessor::~StallverketProcessor()
@@ -123,11 +160,26 @@ void StallverketProcessor::lasInstallning (float* ut) const
 motor::Installning StallverketProcessor::fran (const float* v) const
 {
     motor::Installning in;
-    in.mall      = juce::jlimit (0, motor::kAntalMallar - 1, (int) std::lround (v[0]));
+    in.mall      = juce::jlimit (0, motor::kAntalMallar, (int) std::lround (v[0]));
     in.fro       = (uint32_t) juce::jmax (1, (int) std::lround (v[1]));
     in.form      = juce::jlimit (0, motor::kAntalFormer - 1, (int) std::lround (v[2]));
     in.energi    = v[3]; in.variation = v[4]; in.brytDjup = v[5]; in.byggLangd = v[6];
     in.stok      = v[7]; in.filter = v[8]; in.andas = v[9]; in.dub = v[10]; in.overgang = v[kIOvergang];
+
+    in.kurvaPa = v[kIKurva] > 0.5f;
+    in.kurvTakter = kKurvTakter[juce::jlimit (0, 4, (int) std::lround (v[kIKurva + 1]))];
+    for (int i = 0; i < 8; ++i) in.kurva[i] = juce::jlimit (0.0f, 1.0f, v[kIKurva + 2 + i]);
+
+    auto& e = in.egen;
+    e.namn = "EGEN";
+    for (int d = 0; d < motor::NUM_DEL; ++d) e.langd[d] = (uint8_t) (4 << juce::jlimit (0, 4, (int) std::lround (v[kIEgen + d])));
+    const float* q = v + kIEgen + motor::NUM_DEL;
+    e.pLyft = q[0]; e.pBreak = q[1]; e.pByggDirekt = q[2]; e.pDropDirekt = q[3]; e.pKlimax = q[4]; e.pUtandning = q[5];
+    e.hard = q[6]; e.stok = q[7]; e.dub = q[8]; e.filter = q[9]; e.atmoForst = q[10] > 0.5f;
+
+    uint32_t h = 0x5eed;
+    for (int i = kIKurva; i < kAntalInst; ++i) { uint32_t b; std::memcpy (&b, &v[i], 4); h = motor::blanda (h, b); }
+    in.extra = h;
     return in;
 }
 
@@ -210,6 +262,9 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     const int n = buffer.getNumSamples();
     for (int c = getTotalNumInputChannels(); c < getTotalNumOutputChannels(); ++c) buffer.clear (c, 0, n);
     if (n == 0) return;
+
+    // utan giltig nyckel: ljudet går rakt igenom och inget styrs
+    if (! licens::upplast().load (std::memory_order_relaxed)) return;
 
     auto& nav = ledning::nav();
     const auto nu = nuMs();
@@ -499,7 +554,7 @@ bool StallverketProcessor::sparaPreset (const juce::String& namn)
     x.setAttribute ("namn", namn);
     x.setAttribute ("version", 1);
     for (int i = 0; i < 11; ++i) x.setAttribute (kInstId[i], las (kInstId[i]));
-    x.setAttribute ("overgang", las ("overgang"));
+    for (int i = kIOvergang; i < kAntalInst; ++i) x.setAttribute (kInstId[i], las (kInstId[i]));
     const auto fil = mapp.getChildFile (juce::File::createLegalFileName (namn) + ".stallverket");
     aktivtPresetNamn = namn;
     return x.writeTo (fil);
@@ -511,9 +566,141 @@ bool StallverketProcessor::laddaPresetFil (const juce::File& f)
     if (x == nullptr || ! x->hasTagName ("STALLVERKET_PRESET")) return false;
     for (int i = 0; i < 11; ++i)
         if (x->hasAttribute (kInstId[i])) satt (kInstId[i], (float) x->getDoubleAttribute (kInstId[i]));
-    if (x->hasAttribute ("overgang")) satt ("overgang", (float) x->getDoubleAttribute ("overgang"));
+    for (int i = kIOvergang; i < kAntalInst; ++i)
+        if (x->hasAttribute (kInstId[i])) satt (kInstId[i], (float) x->getDoubleAttribute (kInstId[i]));
     aktivtPresetNamn = x->getStringAttribute ("namn", f.getFileNameWithoutExtension());
     return true;
+}
+
+//==============================================================================
+// Mallar: kopiera en inbyggd mall till EGEN, spara och ladda .stallmall
+void StallverketProcessor::kopieraMallTillEgen()
+{
+    const auto in = installning();
+    const auto& m = motor::mallFor (in);
+    for (int d = 0; d < motor::NUM_DEL; ++d)
+    {
+        int idx = 0; while (idx < 4 && (4 << idx) < m.langd[d]) ++idx;
+        satt (kInstId[kIEgen + d], (float) idx);
+    }
+    const float q[] = { m.pLyft, m.pBreak, m.pByggDirekt, m.pDropDirekt, m.pKlimax, m.pUtandning, m.hard, m.stok, m.dub, m.filter, m.atmoForst ? 1.0f : 0.0f };
+    for (int i = 0; i < 11; ++i) satt (kInstId[kIEgen + motor::NUM_DEL + i], q[i]);
+    satt ("mall", (float) motor::kAntalMallar);
+}
+
+juce::File StallverketProcessor::mallMapp() const { return presetMapp().getParentDirectory().getChildFile ("Mallar"); }
+
+juce::Array<juce::File> StallverketProcessor::egnaMallar() const
+{
+    auto f = mallMapp().findChildFiles (juce::File::findFiles, true, "*.stallmall");
+    f.sort();
+    return f;
+}
+
+bool StallverketProcessor::sparaMall (const juce::String& namn)
+{
+    auto mapp = mallMapp();
+    mapp.createDirectory();
+    juce::XmlElement x ("STALLVERKET_MALL");
+    x.setAttribute ("namn", namn);
+    x.setAttribute ("version", 1);
+    for (int i = kIEgen; i < kAntalInst; ++i) x.setAttribute (kInstId[i], las (kInstId[i]));
+    return x.writeTo (mapp.getChildFile (juce::File::createLegalFileName (namn) + ".stallmall"));
+}
+
+bool StallverketProcessor::laddaMall (const juce::File& f)
+{
+    auto x = juce::XmlDocument::parse (f);
+    if (x == nullptr || ! x->hasTagName ("STALLVERKET_MALL")) return false;
+    for (int i = kIEgen; i < kAntalInst; ++i)
+        if (x->hasAttribute (kInstId[i])) satt (kInstId[i], (float) x->getDoubleAttribute (kInstId[i]));
+    satt ("mall", (float) motor::kAntalMallar);
+    return true;
+}
+
+//==============================================================================
+// Spara låten som MIDI-fil: ett spår med delarna (markörer + noter) och ett spår per kanal
+// med noter när kanalen spelar och automation: CC 11 nivå, CC 74 lågpass, CC 75 högpass.
+juce::File StallverketProcessor::exporteraMidi()
+{
+    const auto in = installning();
+    const auto plan = motor::byggPlan (in);
+    const motor::Overstyr ov;   // exporten följer planen, inte knapptryck
+    const int spt = juce::jmax (1, slagPerTakt());
+    const int takter = in.form > 0 ? (int) plan.takter : 192;
+    constexpr int tpq = 960;
+
+    juce::MidiFile fil;
+    fil.setTicksPerQuarterNote (tpq);
+
+    // tempo och takt
+    juce::MidiMessageSequence delar;
+    delar.addEvent (juce::MidiMessage::textMetaEvent (3, "STALLVERKET delar"), 0);
+    delar.addEvent (juce::MidiMessage::timeSignatureMetaEvent (spt, 4), 0);
+    for (int64_t t = 0; t < takter;)
+    {
+        int64_t ti = 0;
+        const auto d = motor::aktuell (plan, ov, t, ti);
+        const int64_t slut = juce::jmin ((int64_t) takter, t + (d.langd - ti));
+        const double start = (double) t * spt * tpq, stopp = (double) slut * spt * tpq;
+        delar.addEvent (juce::MidiMessage::textMetaEvent (6, motor::delNamn (d.typ)), start);
+        delar.addEvent (juce::MidiMessage::noteOn (16, 36 + d.typ, (juce::uint8) 100), start);
+        delar.addEvent (juce::MidiMessage::noteOff (16, 36 + d.typ), stopp - 1);
+        t = slut;
+    }
+    delar.updateMatchedPairs();
+    fil.addTrack (delar);
+
+    // vilka kanaler: de som är inkopplade, annars en per roll
+    struct Spar { int kanal, roll; };
+    juce::Array<Spar> spar;
+    auto& nav = ledning::nav();
+    const auto nu = nuMs();
+    for (int k = 0; k < ledning::kKanaler; ++k)
+        if (ledning::levande (nav.kanal[k].senast.load(), nu) && nav.kanal[k].roll.load() >= 0 && nav.kanal[k].roll.load() < motor::NUM_ROLL)
+            spar.add ({ k, nav.kanal[k].roll.load() });
+    if (spar.isEmpty())
+        for (int r = 0; r < motor::NUM_ROLL; ++r) spar.add ({ r, r });
+
+    for (const auto& s : spar)
+    {
+        juce::MidiMessageSequence seq;
+        const int ch = (s.kanal % 15) + 1;
+        seq.addEvent (juce::MidiMessage::textMetaEvent (3, juce::String (s.kanal + 1) + " " + motor::rollNamn (s.roll)), 0);
+        int fNiva = -1, fLp = -1, fHp = -1;
+        bool notPa = false;
+        const int steg = takter * spt * 4;   // 16-delar
+        for (int i = 0; i <= steg; ++i)
+        {
+            const double slag = i * 0.25;
+            const double tick = slag * tpq;
+            motor::Atgard a;
+            if (i < steg) a = motor::atgard (plan, in, ov, s.kanal, s.roll, slag + 0.01, spt);
+            const bool grind = ((a.grind >> (i % 16)) & 1u) != 0;
+            const float niva = i < steg ? a.niva * (grind ? 1.0f : 0.0f) : 0.0f;
+            const int cN = juce::roundToInt (niva * 127.0f), cL = juce::roundToInt (a.lp * 127.0f), cH = juce::roundToInt (a.hp * 127.0f);
+            if (cN != fNiva) { seq.addEvent (juce::MidiMessage::controllerEvent (ch, 11, cN), tick); fNiva = cN; }
+            if (cL != fLp)   { seq.addEvent (juce::MidiMessage::controllerEvent (ch, 74, cL), tick); fLp = cL; }
+            if (cH != fHp)   { seq.addEvent (juce::MidiMessage::controllerEvent (ch, 75, cH), tick); fHp = cH; }
+            const bool pa = niva > 0.3f;
+            if (pa != notPa)
+            {
+                if (pa) seq.addEvent (juce::MidiMessage::noteOn (ch, 60, (juce::uint8) juce::jlimit (1, 127, cN)), tick);
+                else    seq.addEvent (juce::MidiMessage::noteOff (ch, 60), tick);
+                notPa = pa;
+            }
+        }
+        seq.updateMatchedPairs();
+        fil.addTrack (seq);
+    }
+
+    auto mapp = presetMapp().getParentDirectory().getChildFile ("Export");
+    mapp.createDirectory();
+    const auto mallNamn = juce::String::fromUTF8 (motor::mallFor (in).namn).replace (juce::String::fromUTF8 ("Ö"), "O");
+    auto ut = mapp.getNonexistentChildFile ("STALLVERKET-" + mallNamn + "-" + juce::String (in.fro), ".mid", false);
+    juce::FileOutputStream os (ut);
+    if (! os.openedOk() || ! fil.writeTo (os, 1)) return {};
+    return ut;
 }
 
 //==============================================================================

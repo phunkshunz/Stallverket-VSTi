@@ -43,6 +43,12 @@ int main (int argc, char** argv)
     }
     std::printf ("NaN: %lld  max: %.3f  följer b mall=%d  MIDI-händelser: %lld\n", (long long) nan, maxv, b.installning().mall, (long long) midiN);
     a.taOver (motor::BYGG);
+    const auto mid = a.exporteraMidi();
+    std::printf ("MIDI-export: %s (%lld byte)\n", mid.getFileName().toRawUTF8(), (long long) mid.getSize());
+    {
+        juce::FileInputStream is (mid); juce::MidiFile mf; mf.readFrom (is);
+        std::printf ("  spår: %d, händelser i spår 2: %d\n", mf.getNumTracks(), mf.getNumTracks() > 1 ? mf.getTrack (1)->getNumEvents() : 0);
+    }
 
     for (auto* p : { &a, &b })
     {
@@ -53,6 +59,16 @@ int main (int argc, char** argv)
         juce::FileOutputStream os (f);
         juce::PNGImageFormat().writeImageToStream (img, os);
         std::printf ("%s %dx%d\n", f.getFullPathName().toRawUTF8(), img.getWidth(), img.getHeight());
+        if (p == &a)
+            for (auto* namn : { "CURVE", "TEMPLATE" })
+                for (auto* c : ed->getChildren())
+                    if (auto* b = dynamic_cast<juce::TextButton*> (c); b != nullptr && b->getButtonText() == namn && b->onClick)
+                    {
+                        b->onClick();
+                        auto im = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+                        juce::File vf (ut + "/vy_" + juce::String (namn) + ".png"); vf.deleteFile();
+                        juce::FileOutputStream vo (vf); juce::PNGImageFormat().writeImageToStream (im, vo);
+                    }
     }
     return nan == 0 ? 0 : 1;
 }

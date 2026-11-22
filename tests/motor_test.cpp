@@ -63,6 +63,17 @@ int main()
     Overstyr h; h.hall = true; h.hallStart = 16; h.hallLangd = 8; h.hallTyp = KLIMAX;
     KOLL (aktuell (p, h, 100, tid).typ == KLIMAX && tid == (100 - 16) % 8);
 
+    // EGEN mall + energikurva
+    {
+        Installning e; e.mall = kAntalMallar; e.egen = kMallar[2]; e.egen.langd[GROOVE] = 8; e.kurvaPa = true; e.kurvTakter = 256;
+        e.extra = 1;
+        const Plan pe = byggPlan (e);
+        KOLL (pe.n > 10);
+        KOLL (energiVid (e, 0) == e.kurva[0]);
+        KOLL (std::abs (energiVid (e, 255) - e.kurva[7]) < 0.05f);
+        KOLL (e != in);
+    }
+
     std::printf (fel ? "\n%d FEL\n" : "\nMotorn OK\n", fel);
     return fel ? 1 : 0;
 }

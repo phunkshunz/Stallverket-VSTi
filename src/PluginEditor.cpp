@@ -50,6 +50,7 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     for (int i = 1; i <= ledning::kKanaler; ++i) kanalVal.addItem (utf8 ("KANAL ") + juce::String (i), i);
     for (int i = 0; i <= motor::NUM_ROLL + 1; ++i) rollVal.addItem (rollText (i), i + 1);
     for (int i = 0; i < motor::kAntalMallar; ++i) mallVal.addItem (juce::String::fromUTF8 (motor::kMallar[i].namn), i + 1);
+    mallVal.addItem ("EGEN", motor::kAntalMallar + 1);
     for (int i = 0; i < motor::kAntalFormer; ++i) formVal.addItem (motor::kFormNamn[i], i + 1);
     kanalAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.state, "kanal", kanalVal);
     rollAtt  = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.state, "roll", rollVal);
@@ -90,7 +91,71 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     hallKnapp.setTooltip (utf8 ("Håller kvar delen som spelar nu, om och om igen. Tryck igen för att släppa."));
     slappKnapp.setTooltip (utf8 ("Släpp allt du tagit över, motorn kör vidare själv."));
 
-    sprakKnapp.onClick = [this] { sprak::sattEngelska (! sprak::engelska()); byggLayout(); };
+    sprakKnapp.onClick = [this] { sprak::sattEngelska (! sprak::engelska()); licensRuta.texter(); byggLayout(); };
+
+    // ---- flikar
+    flikLat.setButtonText (utf8 ("LÅTEN")); flikKurva.setButtonText ("KURVA"); flikMall.setButtonText ("MALL");
+    int fi = 0;
+    for (auto* b : { &flikLat, &flikKurva, &flikMall })
+    {
+        b->setClickingTogglesState (true);
+        b->setRadioGroupId (77);
+        const int v = fi++;
+        b->onClick = [this, v] { visaVy (v); };
+    }
+    flikLat.setToggleState (true, juce::dontSendNotification);
+    flikKurva.setTooltip (utf8 ("Rita energin över hela setet. Ersätter ENERGI-ratten när KURVA PÅ är tänd."));
+    flikMall.setTooltip (utf8 ("Bygg en egen mall: längder, chanser och karaktär. Välj EGEN i mallmenyn."));
+    exportKnapp.setButtonText (utf8 ("SPARA MIDI"));
+    exportKnapp.setTooltip (utf8 ("Sparar låten som MIDI-fil: delarna som markörer och noter, och ett spår per kanal med nivå (CC 11), lågpass (CC 74) och högpass (CC 75)."));
+    exportKnapp.onClick = [this]
+    {
+        const auto f = proc.exporteraMidi();
+        if (f.existsAsFile()) f.revealToUser();
+    };
+
+    // ---- kurva
+    kurvaPa.setButtonText (utf8 ("KURVA PÅ"));
+    kurvaPa.setClickingTogglesState (true);
+    kurvaPaAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.state, "kurva", kurvaPa);
+    for (auto* t : { "128", "256", "512", "1024", "2048" }) kurvLangd.addItem (juce::String (t) + utf8 (" TAKTER"), kurvLangd.getNumItems() + 1);
+    kurvLangdAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.state, "kurvalangd", kurvLangd);
+    kurvLangd.setTooltip (utf8 ("Hur lång kurvan är. 512 takter är ungefär en timme i 130 BPM."));
+
+    // ---- mallredigerare
+    const char* langdId[] = { "e_in", "e_gr", "e_ly", "e_br", "e_by", "e_dr", "e_kl", "e_ut", "e_ou" };
+    for (int d = 0; d < motor::NUM_DEL; ++d)
+    {
+        for (auto* t : { "4", "8", "16", "32", "64" }) mallLangd[d].addItem (t, mallLangd[d].getNumItems() + 1);
+        mallLangdAtt[d] = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.state, langdId[d], mallLangd[d]);
+        mallLangd[d].setTooltip (utf8 ("Längd i takter: ") + sprak::trU (motor::delNamn (d)));
+    }
+    const char* rattId[] = { "e_plyft", "e_pbreak", "e_pbygg", "e_pdrop", "e_pklimax", "e_putand", "e_hard", "e_stok", "e_dub", "e_filter" };
+    for (int i = 0; i < 10; ++i)
+    {
+        mallRatt[i].setSliderStyle (juce::Slider::LinearBar);
+        mallRatt[i].setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+        mallRattAtt[i] = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.state, rattId[i], mallRatt[i]);
+        mallRatt[i].setColour (juce::Slider::textBoxTextColourId, juce::Colours::transparentBlack);
+        mallRatt[i].setColour (juce::Slider::trackColourId, ArmColours::sodiumDk);
+        mallRatt[i].onValueChange = [this] { repaint (tidYta); };
+    }
+    atmoForst.setButtonText (utf8 ("ATMO FÖRST"));
+    atmoForst.setClickingTogglesState (true);
+    atmoAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.state, "e_atmo", atmoForst);
+    atmoForst.setTooltip (utf8 ("I introt kommer atmo och synt in först, kicken sist."));
+    kopieraMall.setButtonText (utf8 ("KOPIERA MALL"));
+    kopieraMall.setTooltip (utf8 ("Kopierar mallen som spelar nu till EGEN, så du kan börja därifrån."));
+    kopieraMall.onClick = [this] { proc.kopieraMallTillEgen(); };
+    sparaMall.setButtonText (utf8 ("SPARA MALL"));
+    sparaMall.onClick = [this] { namnDialog (utf8 ("Spara mall"), [this] (const juce::String& n) { if (proc.sparaMall (n)) fyllMallar(); }); };
+    laddaMall.onChange = [this]
+    {
+        const int i = laddaMall.getSelectedId() - 1;
+        if (juce::isPositiveAndBelow (i, mallFiler.size())) proc.laddaMall (mallFiler[i]);
+    };
+    fyllMallar();
+    licensRuta.onUpplast = [this] { repaint(); };
 
     fro.attach (proc.state, "fro", utf8 ("FRÖ"));
     energi.attach (proc.state, "energi", "ENERGI");
@@ -135,7 +200,14 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
                                                              &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &overgang, &midiKnapp })
         addChildComponent (c);
     for (auto& k : kanalDjup) addChildComponent (k);
+    for (auto* c : std::initializer_list<juce::Component*> { &flikLat, &flikKurva, &flikMall, &exportKnapp, &kurvaPa, &kurvLangd,
+                                                             &atmoForst, &kopieraMall, &sparaMall, &laddaMall })
+        addChildComponent (c);
+    for (auto& c : mallLangd) addChildComponent (c);
+    for (auto& c : mallRatt) addChildComponent (c);
     addChildComponent (om);
+    addChildComponent (licensRuta);
+    licensRuta.setVisible (! licens::upplast().load());
 
     centralVy = proc.arCentral();
     byggLayout();
@@ -182,8 +254,9 @@ void StallverketEditor::byggLayout()
                                                              &slumpaFro, &slumpaAllt, &breakNu, &byggNu, &dropNu, &hallKnapp, &slappKnapp,
                                                              &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &overgang, &midiKnapp })
         c->setVisible (centralVy);
-    for (auto& k : kanalDjup) k.setVisible (centralVy);
     for (auto* c : std::initializer_list<juce::Component*> { &centralKnapp, &kanalVal, &rollVal, &sprakKnapp }) c->setVisible (true);
+    for (auto* c : { &flikLat, &flikKurva, &flikMall, &exportKnapp }) c->setVisible (centralVy);
+    visaVy (vy);
 
     // översätt texterna (rollnamn m.m.)
     for (int i = 0; i <= motor::NUM_ROLL + 1; ++i) rollVal.changeItemText (i + 1, rollText (i));
@@ -205,6 +278,7 @@ void StallverketEditor::byggLayout()
     }
     sprak::oversattAllt (*this);
     resized();
+    licensRuta.toFront (false);
     repaint();
 }
 
@@ -212,6 +286,7 @@ void StallverketEditor::resized()
 {
     auto r = getLocalBounds().reduced (10, 8);
     om.setBounds (getLocalBounds());
+    licensRuta.setBounds (getLocalBounds());
 
     // ---- översta raden
     auto top = r.removeFromTop (30);
@@ -245,6 +320,41 @@ void StallverketEditor::resized()
     // ---- tidslinjen med kanalerna
     tidYta = r.removeFromTop (kTidH);
     {
+        auto f = tidYta.reduced (8).removeFromTop (18);
+        for (auto* b : { &flikLat, &flikKurva, &flikMall }) { b->setBounds (f.removeFromLeft (64)); f.removeFromLeft (4); }
+
+        // kurva
+        auto kv = tidYta.reduced (8).withTrimmedTop (26);
+        auto kRad = kv.removeFromTop (22);
+        kurvaPa.setBounds (kRad.removeFromLeft (90));
+        kRad.removeFromLeft (6);
+        kurvLangd.setBounds (kRad.removeFromLeft (130));
+        kv.removeFromTop (8);
+        kurvYta = kv.reduced (20, 10);
+
+        // mall: tre spalter
+        auto mv = tidYta.reduced (12).withTrimmedTop (30);
+        auto knappRad = mv.removeFromBottom (24);
+        kopieraMall.setBounds (knappRad.removeFromLeft (120)); knappRad.removeFromLeft (6);
+        sparaMall.setBounds (knappRad.removeFromLeft (110)); knappRad.removeFromLeft (6);
+        laddaMall.setBounds (knappRad.removeFromLeft (200));
+        mv.removeFromBottom (10);
+        const int sb = (mv.getWidth() - 40) / 3;
+        auto s1 = mv.removeFromLeft (sb); mv.removeFromLeft (20);
+        auto s2 = mv.removeFromLeft (sb); mv.removeFromLeft (20);
+        auto s3 = mv;
+        mallRubYta[0] = s1.removeFromTop (16); mallRubYta[1] = s2.removeFromTop (16); mallRubYta[2] = s3.removeFromTop (16);
+        const int radH = 28;
+        for (int d = 0; d < motor::NUM_DEL; ++d)
+        {
+            auto rad = s1.removeFromTop (radH);
+            mallLangd[d].setBounds (rad.removeFromRight (70).reduced (0, 3));
+        }
+        for (int i = 0; i < 6; ++i) mallRatt[i].setBounds (s2.removeFromTop (radH + 8).removeFromRight (sb - 110).reduced (0, 6));
+        for (int i = 6; i < 10; ++i) mallRatt[i].setBounds (s3.removeFromTop (radH + 8).removeFromRight (sb - 110).reduced (0, 6));
+        atmoForst.setBounds (s3.removeFromTop (radH + 8).removeFromRight (sb - 110).reduced (0, 5));
+    }
+    {
         auto rader = tidYta.reduced (8).withTrimmedTop (44);
         const int radH = rader.getHeight() / ledning::kKanaler;
         for (int i = 0; i < ledning::kKanaler; ++i)
@@ -269,6 +379,8 @@ void StallverketEditor::resized()
     slumpaAllt.setBounds (valRad.removeFromLeft (110));
     valRad.removeFromLeft (6);
     midiKnapp.setBounds (valRad.removeFromLeft (80));
+    valRad.removeFromLeft (6);
+    exportKnapp.setBounds (valRad.removeFromLeft (110));
 
     botten.removeFromTop (8);
     Knob* rattar[] = { &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &overgang, &pump, &pumptid, &djup };
@@ -301,7 +413,9 @@ void StallverketEditor::paint (juce::Graphics& g)
 
     if (centralVy)
     {
-        ritaTidslinje (g, tidYta);
+        if (vy == 0) ritaTidslinje (g, tidYta);
+        else if (vy == 1) ritaKurva (g, tidYta);
+        else { drawPanel (g, tidYta, "", {}); ritaMallRubriker (g); }
         auto b = getLocalBounds().reduced (10, 8);
         b.removeFromTop (30 + 8 + kTidH + 8);
         auto knappYta = b.removeFromRight (190);
@@ -315,7 +429,7 @@ void StallverketEditor::paint (juce::Graphics& g)
 void StallverketEditor::ritaTidslinje (juce::Graphics& g, juce::Rectangle<int> yta)
 {
     using namespace ArmColours;
-    drawPanel (g, yta, sprak::trU ("LÅTEN"), {});
+    drawPanel (g, yta, "", {});
     auto r = yta.reduced (8);
     auto rubrik = r.removeFromTop (16);
 
@@ -339,11 +453,11 @@ void StallverketEditor::ritaTidslinje (juce::Graphics& g, juce::Rectangle<int> y
         if (proc.haller()) txt << "   ·   " << sprak::trU ("HÅLLER");
         g.setColour (proc.spelarNu() ? text : muted);
         g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-        g.drawText (txt, rubrik.withTrimmedLeft (60), juce::Justification::centredRight);
+        g.drawText (txt, rubrik.withTrimmedLeft (220), juce::Justification::centredRight);
         if (proc.extraCentral())
         {
             g.setColour (sodium);
-            g.drawText (sprak::trU ("EN ANNAN CENTRAL STYR REDAN"), rubrik.withTrimmedLeft (60), juce::Justification::centred);
+            g.drawText (sprak::trU ("EN ANNAN CENTRAL STYR REDAN"), rubrik.withTrimmedLeft (220), juce::Justification::centredLeft);
         }
     }
 
@@ -512,6 +626,7 @@ void StallverketEditor::ritaKanalvy (juce::Graphics& g, juce::Rectangle<int> yta
 
 void StallverketEditor::mouseDown (const juce::MouseEvent& e)
 {
+    if (centralVy && vy == 1 && kurvYta.expanded (10).contains (e.getPosition())) { dragPunkt = -1; dragKurva (e.getPosition()); return; }
     if (logoYta.contains (e.getPosition()))
     {
         om.setVisible (true);
@@ -530,4 +645,155 @@ void StallverketEditor::timerCallback()
     if (proc.presetNamn().isNotEmpty() && presetVal.getSelectedId() == 0)
         presetVal.setText (proc.presetNamn(), juce::dontSendNotification);
     repaint (centralVy ? tidYta : kanalYta);
+}
+
+void StallverketEditor::visaVy (int v)
+{
+    vy = v;
+    const bool c = centralVy;
+    for (auto& k : kanalDjup) k.setVisible (c && vy == 0);
+    for (auto* b : { &kurvaPa }) b->setVisible (c && vy == 1);
+    kurvLangd.setVisible (c && vy == 1);
+    for (auto& m : mallLangd) m.setVisible (c && vy == 2);
+    for (auto& m : mallRatt) m.setVisible (c && vy == 2);
+    for (auto* b : std::initializer_list<juce::Component*> { &atmoForst, &kopieraMall, &sparaMall, &laddaMall }) b->setVisible (c && vy == 2);
+    (vy == 0 ? flikLat : vy == 1 ? flikKurva : flikMall).setToggleState (true, juce::dontSendNotification);
+    repaint();
+}
+
+void StallverketEditor::fyllMallar()
+{
+    mallFiler = proc.egnaMallar();
+    laddaMall.clear (juce::dontSendNotification);
+    for (int i = 0; i < mallFiler.size(); ++i) laddaMall.addItem (mallFiler[i].getFileNameWithoutExtension(), i + 1);
+    laddaMall.setTextWhenNothingSelected (sprak::trU (mallFiler.isEmpty() ? "INGA EGNA MALLAR" : "LADDA MALL"));
+}
+
+void StallverketEditor::namnDialog (const juce::String& rubrik, std::function<void (const juce::String&)> klar)
+{
+    auto* w = new juce::AlertWindow (rubrik, utf8 ("Namn:"), juce::MessageBoxIconType::NoIcon, this);
+    w->addTextEditor ("namn", utf8 ("Min mall"));
+    w->addButton (sprak::trU ("SPARA"), 1, juce::KeyPress (juce::KeyPress::returnKey));
+    w->addButton (sprak::trU ("AVBRYT"), 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    juce::Component::SafePointer<StallverketEditor> sp (this);
+    w->enterModalState (true, juce::ModalCallbackFunction::create ([sp, w, klar] (int r)
+    {
+        if (sp == nullptr || r != 1) return;
+        const auto n = w->getTextEditorContents ("namn").trim();
+        if (n.isNotEmpty()) klar (n);
+    }), true);
+}
+
+void StallverketEditor::ritaMallRubriker (juce::Graphics& g)
+{
+    using namespace ArmColours;
+    const juce::String rub[] = { sprak::trU ("LÄNGDER (TAKTER)"), sprak::trU ("CHANSER"), sprak::trU ("KARAKTÄR") };
+    g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
+    for (int i = 0; i < 3; ++i) { g.setColour (sodium); g.drawText (rub[i], mallRubYta[i], juce::Justification::centredLeft); }
+
+    g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
+    g.setColour (text);
+    for (int d = 0; d < motor::NUM_DEL; ++d)
+    {
+        auto b = mallLangd[d].getBounds();
+        g.setColour (delFarg (d));
+        g.fillRoundedRectangle (juce::Rectangle<float> (8, 8).withCentre ({ (float) mallRubYta[0].getX() + 5.0f, (float) b.getCentreY() }), 2.0f);
+        g.setColour (text);
+        g.drawText (sprak::trU (motor::delNamn (d)), mallRubYta[0].getX() + 14, b.getY(), 120, b.getHeight(), juce::Justification::centredLeft);
+    }
+    const char* namn[] = { "LYFT EFTER GROOVE", "BREAK EFTER GROOVE", "BYGG DIREKT", "DROP DIREKT", "KLIMAX", "UTANDNING",
+                           "HÅRDA KLIPP", "STÖK", "DUBKAST", "FILTER" };
+    for (int i = 0; i < 10; ++i)
+    {
+        auto b = mallRatt[i].getBounds();
+        const int x = mallRubYta[i < 6 ? 1 : 2].getX();
+        g.setColour (text);
+        g.drawText (sprak::trU (namn[i]), x, b.getY() - 9, 108, b.getHeight(), juce::Justification::centredLeft);
+        g.setColour (sodium);
+        g.drawText (juce::String (juce::roundToInt (mallRatt[i].getValue() * 100.0)) + " %", x, b.getY() + 7, 108, b.getHeight(), juce::Justification::centredLeft);
+    }
+    if (proc.installning().mall != motor::kAntalMallar)
+    {
+        g.setColour (sodium);
+        g.drawText (sprak::trU ("VÄLJ EGEN I MALLMENYN FÖR ATT HÖRA DIN MALL"), tidYta.reduced (12).removeFromTop (18).withTrimmedLeft (220), juce::Justification::centredRight);
+    }
+}
+
+void StallverketEditor::ritaKurva (juce::Graphics& g, juce::Rectangle<int> yta)
+{
+    using namespace ArmColours;
+    drawPanel (g, yta, "", {});
+    const auto in = proc.installning();
+    auto r = kurvYta.toFloat();
+    g.setColour (raised.withAlpha (0.6f));
+    g.fillRoundedRectangle (r.expanded (8), 6.0f);
+    g.setColour (line2);
+    for (int i = 0; i <= 4; ++i) { const float y = r.getY() + r.getHeight() * (float) i / 4.0f; g.drawHorizontalLine ((int) y, r.getX(), r.getRight()); }
+
+    // delarna under kurvan, så man ser vad kurvan gör med låten
+    const auto plan = motor::byggPlan (in);
+    const motor::Overstyr ov;
+    const int n = in.kurvTakter;
+    for (int64_t t = 0; t < n;)
+    {
+        int64_t ti = 0;
+        const auto d = motor::aktuell (plan, ov, t, ti);
+        const int64_t slut = juce::jmin ((int64_t) n, t + (d.langd - ti));
+        const float x0 = r.getX() + r.getWidth() * (float) t / (float) n, x1 = r.getX() + r.getWidth() * (float) slut / (float) n;
+        g.setColour (delFarg (d.typ).withAlpha (in.kurvaPa ? 0.55f : 0.2f));
+        g.fillRect (juce::Rectangle<float> (x0, r.getBottom() - 10.0f, juce::jmax (1.0f, x1 - x0 - 0.5f), 10.0f));
+        t = slut;
+    }
+
+    juce::Path p;
+    for (int i = 0; i <= 200; ++i)
+    {
+        auto kopia = in; kopia.kurvaPa = true;
+        const float v = motor::energiVid (kopia, (int64_t) ((double) i / 200.0 * (n - 1)));
+        const float x = r.getX() + r.getWidth() * (float) i / 200.0f, y = r.getBottom() - 14.0f - (r.getHeight() - 14.0f) * v;
+        if (i == 0) p.startNewSubPath (x, y); else p.lineTo (x, y);
+    }
+    g.setColour (in.kurvaPa ? sodium : muted);
+    g.strokePath (p, juce::PathStrokeType (2.2f));
+    for (int i = 0; i < 8; ++i)
+    {
+        const float x = r.getX() + r.getWidth() * (float) i / 7.0f, y = r.getBottom() - 14.0f - (r.getHeight() - 14.0f) * in.kurva[i];
+        g.setColour (i == dragPunkt ? text : (in.kurvaPa ? sodium : muted));
+        g.fillEllipse (juce::Rectangle<float> (12, 12).withCentre ({ x, y }));
+    }
+    // spelhuvud
+    const double takt = proc.slagNu() / juce::jmax (1, proc.slagPerTakt());
+    const float xs = r.getX() + r.getWidth() * (float) std::fmod (takt, (double) n) / (float) n;
+    g.setColour (text.withAlpha (0.7f));
+    g.drawVerticalLine ((int) xs, r.getY(), r.getBottom());
+    g.setColour (muted);
+    g.setFont (juce::FontOptions (10.0f));
+    g.drawText (sprak::trU ("DRA I PUNKTERNA. ENERGIN STYR BREAKS, KLIMAX OCH HUR MYCKET SOM SPELAR."), yta.reduced (12).removeFromTop (18).withTrimmedLeft (220),
+                juce::Justification::centredRight);
+}
+
+void StallverketEditor::dragKurva (juce::Point<int> pos)
+{
+    auto r = kurvYta.toFloat();
+    if (dragPunkt < 0)
+    {
+        const int i = juce::jlimit (0, 7, juce::roundToInt ((pos.x - r.getX()) / r.getWidth() * 7.0f));
+        dragPunkt = i;
+        if (auto* prm = proc.state.getParameter ("k" + juce::String (i + 1))) prm->beginChangeGesture();
+    }
+    const float v = juce::jlimit (0.0f, 1.0f, (r.getBottom() - 14.0f - (float) pos.y) / (r.getHeight() - 14.0f));
+    if (auto* prm = proc.state.getParameter ("k" + juce::String (dragPunkt + 1))) prm->setValueNotifyingHost (v);
+    repaint (tidYta);
+}
+
+void StallverketEditor::mouseDrag (const juce::MouseEvent& e)
+{
+    if (centralVy && vy == 1 && dragPunkt >= 0) dragKurva (e.getPosition());
+}
+
+void StallverketEditor::mouseUp (const juce::MouseEvent&)
+{
+    if (dragPunkt >= 0)
+        if (auto* prm = proc.state.getParameter ("k" + juce::String (dragPunkt + 1))) prm->endChangeGesture();
+    dragPunkt = -1;
 }

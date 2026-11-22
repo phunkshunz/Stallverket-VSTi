@@ -34,6 +34,16 @@ CENTRAL behandlar också ljudet på sin egen kanal, så den kan ligga på t.ex. 
 - **BREAK NU / BYGG NU / DROP NU**: ta över från nästa takt. **HÅLL**: loopa delen som spelar nu. **SLÄPP**: motorn kör vidare själv.
 - Tidslinjen visar delarna och vad varje kanal gör de kommande 56 takterna.
 
+## Flikarna LÅTEN, KURVA och MALL
+
+- **KURVA**: rita energin över hela setet med åtta punkter (128 till 2048 takter, 512 takter är ungefär en timme i 130 BPM). Tänd **KURVA PÅ**, så ersätter kurvan ENERGI-ratten: lågt = fler breaks och färre element, högt = fler klimax.
+- **MALL**: bygg en egen mall. Längd per del, chanser (lyft, break, direkt bygg, direkt drop, klimax, utandning) och karaktär (hårda klipp, stök, dubkast, filter, atmo först). Välj **EGEN** i mallmenyn för att höra den. **KOPIERA MALL** tar mallen som spelar som startpunkt. Egna mallar sparas som `.stallmall` i `Dokument/Phunkshunz/STALLVERKET/Mallar`.
+- **SPARA MIDI**: sparar låten som MIDI-fil i `Dokument/Phunkshunz/STALLVERKET/Export` och visar den i Finder. Ett spår med delarna (markörer + noter C1 och uppåt) och ett spår per kanal med en not när kanalen spelar, plus nivå (CC 11), lågpass (CC 74) och högpass (CC 75). Dra in filen i Bitwig.
+
+## Licens
+
+Fullversionen låses upp med en nyckel från Payhip. Klistra in den en gång, så hittar alla MASKINHALLEN-maskiner på datorn den. En bundle-nyckel låser upp allt. Utan nyckel går ljudet rakt igenom.
+
 ## Presets
 
 40 fabrikspresets (motor-presets). Egna sparas med **SPARA** som `.stallverket`-filer i

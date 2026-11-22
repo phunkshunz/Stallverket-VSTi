@@ -17,7 +17,7 @@
 namespace ledning
 {
 inline constexpr int kKanaler = 16;
-inline constexpr int kInst = 32;     // antal värden som skickas från CENTRAL
+inline constexpr int kInst = 64;     // antal värden som skickas från CENTRAL
 
 struct Kanal
 {
