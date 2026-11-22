@@ -50,7 +50,7 @@ public:
     int  kanal() const;     // 0..7
     int  roll() const;      // roll som gäller (AUTO omräknad), NUM_ROLL = ORÖRD
     int  rollVal() const;   // valet i menyn, NUM_ROLL + 1 = AUTO
-    int  autoGissning() const { return autoRoll.load(); }
+    int  autoGissning() const { return autoAktiv.load() >= 0 ? autoAktiv.load() : autoRoll.load(); }
     motor::Installning installning() const;   // det som gäller just nu (från CENTRAL eller sparat)
     motor::Overstyr overstyr() const;
     bool centralLever() const;
@@ -109,7 +109,7 @@ private:
     double sr = 48000.0;
     fack::Fack fack;
     lyssna::Lyssnare lyssnare;
-    std::atomic<int> autoRoll { -1 };
+    std::atomic<int> autoRoll { -1 }, autoAktiv { -1 };
     double klocka = 0.0, forvantat = 0.0;
     juce::String skriftText;
 

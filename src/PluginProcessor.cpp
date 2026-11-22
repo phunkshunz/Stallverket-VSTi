@@ -105,7 +105,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout StallverketProcessor::skapaP
                                 "Stamning", "Bandglapp", "Kanalbyte", "Spökeko", "Stopp-slag" };
     for (int i = 0; i < 12; ++i)
         p.push_back (std::make_unique<AudioParameterBool> (ParameterID { trickId[i], 1 }, String::fromUTF8 (trickNamn[i]), true));
-    knapp ("trickmangd", "Hur ofta", 0.5f);
+    knapp ("trickmangd", "Hur ofta", 0.35f);
     // knappar som går att mappa till en controller (reagerar när de slås på)
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "breaknu", 1 }, "Break nu", false));
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "byggnu", 1 },  "Bygg nu", false));
@@ -218,7 +218,7 @@ int  StallverketProcessor::roll() const
 {
     const int r = rollVal();
     if (r != kRollAuto) return r;
-    const int g = autoRoll.load();
+    const int g = autoAktiv.load();
     return g >= 0 ? g : motor::LOOP;   // har inte hört nog än: behandlas som LOOP så länge
 }
 
@@ -259,6 +259,7 @@ void StallverketProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     monoBuf.assign ((size_t) juce::jmax (4096, samplesPerBlock * 2), 0.0f);
     fack.forbered (sampleRate);
     lyssnare.forbered (sampleRate);
+    setLatencySamples (fack.latens());
 
     // Ny instans (inte laddad från ett projekt): välj själv plats.
     // Finns ingen CENTRAL blir den här CENTRAL, annars tar den första lediga kanalen.
@@ -457,6 +458,15 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     {
         for (int i = 0; i < n; ++i) lyssnare.sampla (0.5f * (L[i] + R[i]), ppq + i * slagPerSampel);
         autoRoll.store (lyssnare.roll());
+        // byt roll bara på hel takt (första gången) eller i början av en 8-taktsfras, aldrig mitt i
+        const int gissning = autoRoll.load();
+        if (gissning >= 0 && gissning != autoAktiv.load())
+        {
+            const double taktNu = ppq / slagPerTakt, taktSlut = (ppq + n * slagPerSampel) / slagPerTakt;
+            const bool nyTakt = std::floor (taktSlut) > std::floor (taktNu);
+            const bool nyFras = nyTakt && ((int64_t) std::floor (taktSlut) % 8) == 0;
+            if ((autoAktiv.load() < 0 && nyTakt) || nyFras) autoAktiv.store (gissning);
+        }
     }
 
     const bool styr = play && r < motor::NUM_ROLL;
@@ -472,7 +482,9 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     const float pumpTid = 0.12f + v[kIPumpTid] * 0.7f;
     const float kickDjup = kickKanal >= 0 ? juce::jlimit (0.0f, 1.0f, v[11] * v[12 + kickKanal]) : 0.0f;
 
-    fack.kor (L, R, n, ppq, slagPerSampel, styr, djup, 1.0f,
+    // ljudet som hörs är 30 ms gammalt (framåtblicken), så motorn räknar på ljudets tid
+    const double ljudTid = ppq - fack.latens() * slagPerSampel;
+    fack.kor (L, R, n, ljudTid, slagPerSampel, styr, djup, 1.0f,
               [&] (double s)
               {
                   auto a = motor::atgard (plan, in, ov, k, r, s, slagPerTakt);
@@ -497,11 +509,11 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     if (play && oppenRecIdAtomic.load() != 0)
     {
         const double rs = nav.recStart.load(), re = nav.recStopp.load();
-        const double slut = ppq + n * slagPerSampel;
-        if (slut > rs && ppq < re)
+        const double slut = ljudTid + n * slagPerSampel;
+        if (slut > rs && ljudTid < re)
         {
-            const int a0 = ppq >= rs ? 0 : juce::jlimit (0, n, (int) std::ceil ((rs - ppq) / slagPerSampel));
-            const int a1 = slut <= re ? n : juce::jlimit (0, n, (int) std::ceil ((re - ppq) / slagPerSampel));
+            const int a0 = ljudTid >= rs ? 0 : juce::jlimit (0, n, (int) std::ceil ((rs - ljudTid) / slagPerSampel));
+            const int a1 = slut <= re ? n : juce::jlimit (0, n, (int) std::ceil ((re - ljudTid) / slagPerSampel));
             if (a1 > a0)
             {
                 const juce::SpinLock::ScopedTryLockType lock (skrivLas);

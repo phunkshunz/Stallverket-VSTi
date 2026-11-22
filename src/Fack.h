@@ -99,6 +99,14 @@ public:
         sr = (float) sampleRate;
         ring.assign ((size_t) (sr * 32.0f) * 2, 0.0f);
         ringLen = (int) (ring.size() / 2);
+        ringAnslag.assign ((size_t) ringLen, 0);
+        // framåtblick: ljudet fördröjs 30 ms så att maskinen hinner se vad som kommer
+        framLen = std::max (64, (int) std::lround (sr * 0.030));
+        fram.assign ((size_t) (framLen + 1) * 2, 0.0f);
+        framAnslag.assign ((size_t) (framLen + 1), 0);
+        framPos = 0;
+        detSnabb = detLangsam = 0.0f; detVila = 0;
+        sparrOppna = sparrStang = false;
         eko.assign ((size_t) (sr * 4.0f) * 2, 0.0f);
         ekoLen = (int) (eko.size() / 2);
         skriv = 0; ekoSkriv = 0;
@@ -124,7 +132,12 @@ public:
         const float fTid = 1.0f - std::exp (-1.0f / (0.025f * sr));
         const double sampelPerSlag = slagPerSampel > 0 ? 1.0 / slagPerSampel : (double) sr * 0.5;
 
-        motor::Atgard a;
+        const float gStang = 1.0f - std::exp (-1.0f / (0.012f * sr));  // 12 ms ut: inga avhuggna svansar
+        const float aSnabb = 1.0f - std::exp (-1.0f / (0.001f * sr));
+        const float aLangsam = 1.0f - std::exp (-1.0f / (0.040f * sr));
+        const double framSlag = (double) framLen * slagPerSampel * 0.85;   // hur långt fram vi tittar
+
+        motor::Atgard a, aFram;
         double nastaKoll = -1.0;
 
         for (int i = 0; i < n; ++i)
@@ -134,20 +147,60 @@ public:
             // ny åtgärd var 1/64-del (eller när transporten står)
             const double ruta = std::floor (slag * 16.0);
             if (! spelar) a = motor::Atgard();
-            else if (ruta != nastaKoll) { a = atgardVid (slag); nastaKoll = ruta; }
+            else if (ruta != nastaKoll) { a = atgardVid (slag); aFram = atgardVid (slag + framSlag); nastaKoll = ruta; }
+
+            // ---- framåtblick: in i fördröjningen, och hitta anslag (trumslag, toner som börjar)
+            const float raL = L[i], raR = R[i];
+            {
+                const float ax = 0.5f * (std::abs (raL) + std::abs (raR));
+                detSnabb += aSnabb * (ax - detSnabb);
+                detLangsam += aLangsam * (ax - detLangsam);
+                uint8_t anslag = 0;
+                if (detVila > 0) --detVila;
+                else if (detSnabb > detLangsam * 2.0f && detSnabb > 0.01f) { anslag = 1; detVila = (int) (sr * 0.04f); }
+                fram[(size_t) framPos * 2] = raL; fram[(size_t) framPos * 2 + 1] = raR;
+                framAnslag[(size_t) framPos] = anslag;
+            }
+            int lasPos = framPos + 1; if (lasPos > framLen) lasPos = 0;      // äldsta = det som spelas nu
+            const float inL = fram[(size_t) lasPos * 2], inR = fram[(size_t) lasPos * 2 + 1];
+            const bool anslagNu = framAnslag[(size_t) lasPos] != 0;
+            if (++framPos > framLen) framPos = 0;
 
             // djup: hur mycket motorn får styra den här kanalen
             const float d = spelar ? djup : 0.0f;
             const int steg = (int) std::fmod (std::floor (slag * 4.0), 16.0);
             const bool grindPa = ((a.grind >> steg) & 1u) != 0;
-            const float malNiva = 1.0f + ((a.niva * (grindPa ? 1.0f : 0.0f)) - 1.0f) * d;
+            float nivaNu = a.niva * (grindPa ? 1.0f : 0.0f);
+
+            // ---- byt på slaget i ljudet, inte mitt i det: ligger ett anslag strax före en
+            // ändring på rutnätet öppnar/stänger vi vid anslaget i stället, så slaget kommer med helt
+            // (eller inte alls) i stället för att huggas av.
+            {
+                const int stegF = (int) std::fmod (std::floor ((slag + framSlag) * 4.0), 16.0);
+                const float nivaFram = aFram.niva * (((aFram.grind >> stegF) & 1u) ? 1.0f : 0.0f);
+                if (sparrOppna && nivaNu > 0.5f) sparrOppna = false;
+                if (sparrStang && nivaNu < 0.3f) sparrStang = false;
+                if (anslagNu && spelar)
+                {
+                    if (nivaNu < 0.3f && nivaFram > 0.5f) { sparrOppna = true; sparrStang = false; }
+                    else if (nivaNu > 0.5f && nivaFram < 0.3f) { sparrStang = true; sparrOppna = false; }
+                }
+                if (sparrOppna) nivaNu = std::max (nivaNu, nivaFram);
+                if (sparrStang) nivaNu = std::min (nivaNu, nivaFram);
+            }
+            const float malNiva = 1.0f + (nivaNu - 1.0f) * d;
             const float malLp = 1.0f + (a.lp - 1.0f) * d;
             const float malHp = a.hp * d;
             const bool  stut = d > 0.5f && a.stutter > 0.0f;
             const bool  bak  = d > 0.5f && a.bak;
             const float dub  = a.dub * d;
 
-            gain += ((a.grind != 0xFFFF || a.hard) ? gTid : gMjuk) * (malNiva - gain);
+            {
+                // upp: snabbt vid ett anslag/hårt klipp, annars mjukt. Ner: aldrig snabbare än 12 ms.
+                float k = (a.grind != 0xFFFF || a.hard || sparrOppna) ? gTid : gMjuk;
+                if (malNiva < gain) k = std::min (k, gStang);
+                gain += k * (malNiva - gain);
+            }
             lpN  += fTid * (malLp - lpN);
             hpN  += fTid * (malHp - hpN);
 
@@ -157,7 +210,7 @@ public:
                 hp.satt (20.0f * std::pow (2.0f, hpN * 7.0f), sr, 0.75f);
             }
 
-            const float inL = L[i], inR = R[i];
+            ringAnslag[(size_t) skriv] = anslagNu ? 1 : 0;
             ring[(size_t) skriv * 2] = inL;
             ring[(size_t) skriv * 2 + 1] = inR;
 
@@ -176,6 +229,13 @@ public:
                     stutterBit = bitIndex;
                     const double fas = (slag - bitIndex * bit) * sampelPerSlag;
                     ankare = skriv - (int) fas;
+                    // börja biten på slaget: ligger ett anslag upp till 25 ms före rutnätet, ta det
+                    const int sok = (int) (sr * 0.025f);
+                    for (int k = 0; k <= sok; ++k)
+                    {
+                        int idx = ankare - k; idx = ((idx % ringLen) + ringLen) % ringLen;
+                        if (ringAnslag[(size_t) idx]) { ankare -= k; break; }
+                    }
                 }
                 if (bitIndex > stutterBit)
                 {
@@ -352,6 +412,7 @@ public:
         r = ring[(size_t) i0 * 2 + 1] + (ring[(size_t) i1 * 2 + 1] - ring[(size_t) i0 * 2 + 1]) * fr;
     }
 
+    int latens() const { return framLen; }      // rapporteras till DAW:en, som skjuter allt annat lika mycket
     float nivaMatare() const { return topp; }
     float aktuellGain() const { return gain; }
     float aktuellLp() const { return lpN; }
@@ -359,7 +420,11 @@ public:
 
 private:
     float sr = 48000.0f;
-    std::vector<float> ring, eko;
+    std::vector<float> ring, eko, fram;
+    std::vector<uint8_t> ringAnslag, framAnslag;
+    int framLen = 64, framPos = 0, detVila = 0;
+    float detSnabb = 0, detLangsam = 0;
+    bool sparrOppna = false, sparrStang = false;
     int ringLen = 0, ekoLen = 0, skriv = 0, ekoSkriv = 0;
     Svf lp, hp;
     float gain = 1, lpN = 1, hpN = 0, pumpN = 1, ekoLp[2] {};

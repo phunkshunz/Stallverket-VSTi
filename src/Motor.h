@@ -552,7 +552,6 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
             if (s.typ == LYFT)
             {
                 if (roll == SYNT || roll == FX) a.lp = 0.4f + 0.6f * t;
-                if (roll == HATS && in.variation > 0.3f) a.grind = grindMonster (hk, 0.6f);
                 if (roll == BAS) a.hp = 0.15f * filt * t;
             }
             break;
@@ -570,7 +569,7 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
                 case SYNT: a.niva = 1.0f; a.dub = dub * 0.25f; break;
                 case ATMO: a.niva = 1.0f; a.dub = dub * 0.2f; break;
                 case FX:   a.niva = 0.8f; break;
-                case LOOP: a.lp = 1.0f - 0.6f * filt; a.grind = grindMonster (hk, 0.3f); break;
+                case LOOP: a.lp = 1.0f - 0.6f * filt; a.niva = 0.7f; break;
                 case CLAP: if (d > 0.5f) a.niva = 0.0f; else { a.lp = 1.0f - 0.4f * filt; a.dub = dub * 0.3f; } break;
                 case RIDE: a.niva = 0.0f; break;
                 case VOX:  a.niva = 1.0f; a.dub = dub * 0.35f; a.rum = in.overgang * 0.3f; break;
@@ -640,7 +639,6 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
 
         case KLIMAX:
             if (roll == FX)   a.grind = grindMonster (blanda (hk, (uint32_t) fras), 0.5f + energiVid (in, takt) * 0.4f);
-            if (roll == LOOP && in.variation > 0.5f && (fras % 2) == 1) a.grind = grindMonster (blanda (hk, (uint32_t) fras, 3), 0.8f);
             if (roll == VOX && (fras % 2) == 0) a.niva = 0.0f;
             break;
 
@@ -798,24 +796,24 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
     }
 
     // ---- grooveknep: högst ett per takt, aldrig i frasens sista takt
+    // bara i fjärde takten av en fras (inte fras-slutet där fillsen ligger), så det låter avsiktligt
     if ((s.typ == GROOVE || s.typ == LYFT || s.typ == KLIMAX || s.typ == UTANDNING || (s.typ == DROP && tid >= 1))
-        && (tid % 8) != 7)
+        && (tid % 8) == 3 && slagKvar > sptD)
     {
         const uint32_t hb = blanda (s.h, (uint32_t) tid, 0x7A1C);
-        if (slump01 (hb) < in.trickMangd * 0.35f)
+        if (slump01 (hb) < in.trickMangd * 0.8f)
         {
             const uint32_t ef = valjTrick (hb + 1, { T_STAM, T_GLAPP, T_BYT, T_SPOKE, T_STOPP });
             if (ef == T_STAM)
             {
-                const double w = (double) (blanda (hb + 2) % (uint32_t) (slagPerTakt * 2)) * 0.5;
+                const double w = sptD - 0.5;   // sista åttondelen i takten
                 const bool med = (roll == HATS || roll == PERC || roll == LOOP || roll == SYNT || roll == CLAP || roll == VOX)
                                  && slump01 (blanda (hb + 3, (uint32_t) roll)) < 0.6f;
                 if (med && iTakt >= w && iTakt < w + 0.5) a.stutter = 0.5f;
             }
             else if (ef == T_GLAPP && roll != KICK)
             {
-                const int b = (int) (blanda (hb + 4) % (uint32_t) slagPerTakt);
-                if ((int) std::floor (iTakt) == b) a.glapp = true;
+                if (iTakt >= sptD - 1.0) a.glapp = true;   // sista slaget
             }
             else if (ef == T_BYT) a.byt = true;
             else if (ef == T_SPOKE)
@@ -825,8 +823,7 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
             }
             else if (ef == T_STOPP)
             {
-                const double b2 = 1.0 + (double) (blanda (hb + 6) % (uint32_t) (slagPerTakt > 1 ? slagPerTakt - 1 : 1));
-                if (iTakt >= b2 && iTakt < b2 + 0.5) { a.niva = 0.0f; a.hard = true; }
+                if (iTakt >= sptD - 0.5) { a.niva = 0.0f; a.hard = true; }   // andra halvan av sista slaget
             }
         }
     }
