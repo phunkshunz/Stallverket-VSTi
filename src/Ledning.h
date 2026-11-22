@@ -48,6 +48,12 @@ struct Nav
     // var CENTRAL är i låten (för KANAL-displayen när den inte spelar själv)
     std::atomic<double>   slag { 0.0 };
 
+    // REC från CENTRAL: id = när inspelningen startades (ms), 0 = ingen.
+    // Alla skriver från takten recStart till takten recStopp, så filerna ligger exakt i linje.
+    std::atomic<int64_t>  recId { 0 };
+    std::atomic<double>   recStart { 0.0 };
+    std::atomic<double>   recStopp { 1.0e18 };
+
     // SKRIFTEN från CENTRAL
     std::atomic<int>      skrift[32];
     std::atomic<int>      skriftN { 0 };

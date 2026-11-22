@@ -25,6 +25,7 @@ int main (int argc, char** argv)
     // b står kvar på AUTO och får en trumloop (kick + hats)
     c.state.getParameter ("roll")->setValueNotifyingHost (c.state.getParameter ("roll")->convertTo0to1 (5));
     a.laddaFabrik (41);  // ett preset med ny mall
+    a.vaxlaRec();        // REC från start
     juce::AudioBuffer<float> buf (2, 512);
     juce::MidiBuffer m;
     juce::Random rnd (1);
@@ -50,10 +51,18 @@ int main (int argc, char** argv)
             for (int ch = 0; ch < 2; ++ch) for (int i = 0; i < 512; ++i) { float v = buf.getSample (ch, i); if (! std::isfinite (v)) ++nan; maxv = std::max (maxv, (double) std::abs (v)); }
         }
         ph.ppq += 512.0 * 130.0 / 60.0 / 48000.0;
+        if (blk % 20 == 0) juce::MessageManager::getInstance()->runDispatchLoopUntil (1);
+        if (blk == 2000) a.vaxlaRec();   // stoppa efter ~21 s
         if (ph.ppq >= 16.0) ph.ppq -= 16.0;   // DAW:en loopar 4 takter
     }
     std::printf ("takt efter 3 min med 4-taktsloop: %d (ska vara ~97)  roll c: %d  roll b (AUTO, trumloop): %s  roll a (AUTO, brus): %s\n", (int) (a.slagNu() / 4), c.roll(), motor::rollNamn (b.roll()), motor::rollNamn (a.roll()));
     std::printf ("NaN: %lld  max: %.3f  följer b mall=%d  MIDI-händelser: %lld\n", (long long) nan, maxv, b.installning().mall, (long long) midiN);
+    juce::MessageManager::getInstance()->runDispatchLoopUntil (300);
+    {
+        auto mapp = juce::File::getSpecialLocation (juce::File::userDesktopDirectory).getChildFile (juce::String::fromUTF8 ("STÄLLVERKET inspelningar"));
+        for (auto& f : mapp.findChildFiles (juce::File::findFiles, true, "*.wav"))
+            std::printf ("REC: %s  %lld byte\n", f.getFileName().toRawUTF8(), (long long) f.getSize());
+    }
     a.taOver (motor::BYGG);
     const auto mid = a.exporteraMidi();
     std::printf ("MIDI-export: %s (%lld byte)\n", mid.getFileName().toRawUTF8(), (long long) mid.getSize());

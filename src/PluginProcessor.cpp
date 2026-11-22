@@ -132,6 +132,7 @@ StallverketProcessor::StallverketProcessor()
     minId = (uint32_t) juce::Random::getSystemRandom().nextInt (0x7fffffff) | 1u;
     sattSkrift ("I16 G32 L8 B16 U8 D16 K32 A16 B8 U8 D16 G32 O16");
     lasInstallning (cache);
+    startTimerHz (20);
    #if STALLVERKET_TEST_UNLOCKED
     licens::upplast().store (true);   // bara testprogrammet, aldrig det som säljs
    #else
@@ -141,6 +142,8 @@ StallverketProcessor::StallverketProcessor()
 
 StallverketProcessor::~StallverketProcessor()
 {
+    stopTimer();
+    stangRec();
     auto& n = ledning::nav();
     uint32_t id = minId;
     n.centralId.compare_exchange_strong (id, 0u);
@@ -490,6 +493,30 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
                   return a;
               });
 
+    // ---- REC: skriv den del av blocket som ligger mellan start- och stopptakten
+    if (play && oppenRecIdAtomic.load() != 0)
+    {
+        const double rs = nav.recStart.load(), re = nav.recStopp.load();
+        const double slut = ppq + n * slagPerSampel;
+        if (slut > rs && ppq < re)
+        {
+            const int a0 = ppq >= rs ? 0 : juce::jlimit (0, n, (int) std::ceil ((rs - ppq) / slagPerSampel));
+            const int a1 = slut <= re ? n : juce::jlimit (0, n, (int) std::ceil ((re - ppq) / slagPerSampel));
+            if (a1 > a0)
+            {
+                const juce::SpinLock::ScopedTryLockType lock (skrivLas);
+                if (lock.isLocked() && skrivare != nullptr)
+                {
+                    const float* kanaler[2] = { L + a0, R + a0 };
+                    skrivare->write (kanaler, a1 - a0);
+                    skrivnaSampel += a1 - a0;
+                    skriver.store (true);
+                }
+            }
+        }
+        if (slut >= re) { recKlar.store (true); skriver.store (false); }
+    }
+
     // ---- rapportera till CENTRAL
     auto& kn = nav.kanal[k];
     kn.roll.store (r);
@@ -617,6 +644,109 @@ bool StallverketProcessor::laddaPresetFil (const juce::File& f)
     if (x->hasAttribute ("skrift")) sattSkrift (x->getStringAttribute ("skrift"));
     aktivtPresetNamn = x->getStringAttribute ("namn", f.getFileNameWithoutExtension());
     return true;
+}
+
+//==============================================================================
+// REC
+juce::File StallverketProcessor::recMapp (int64_t id) const
+{
+    const auto tid = juce::Time (id).formatted ("%Y-%m-%d %H.%M.%S");
+    return juce::File::getSpecialLocation (juce::File::userDesktopDirectory)
+        .getChildFile (juce::String::fromUTF8 ("STÄLLVERKET inspelningar")).getChildFile (tid);
+}
+
+double StallverketProcessor::recSekunder() const { return (double) skrivnaSampel.load() / juce::jmax (1.0, sr); }
+
+void StallverketProcessor::vaxlaRec()
+{
+    auto& n = ledning::nav();
+    const double s = slag.load();
+    const int spt_ = juce::jmax (1, spt.load());
+    if (n.recId.load() == 0)
+    {
+        // börja på nästa takt (minst ett slag bort), eller direkt vid play om transporten står
+        double start = -1.0e18;
+        if (spelar.load())
+        {
+            start = (std::floor (s / spt_) + 1.0) * spt_;
+            if (start - s < 1.0) start += spt_;
+        }
+        n.recStopp.store (1.0e18);
+        n.recStart.store (start);
+        n.recId.store (juce::Time::currentTimeMillis());
+    }
+    else
+    {
+        // sluta på nästa takt, så sista takten kommer med hel
+        double stopp = -1.0e18;
+        if (spelar.load())
+        {
+            stopp = (std::floor (s / spt_) + 1.0) * spt_;
+            if (stopp - s < 0.5) stopp += spt_;
+        }
+        n.recStopp.store (stopp);
+    }
+}
+
+void StallverketProcessor::stangRec()
+{
+    std::unique_ptr<juce::AudioFormatWriter::ThreadedWriter> gammal;
+    {
+        const juce::SpinLock::ScopedLockType lock (skrivLas);
+        gammal = std::move (skrivare);
+    }
+    gammal.reset();   // tömmer det som är kvar till filen
+    oppenRecId = 0;
+    oppenRecIdAtomic.store (0);
+    skriver.store (false);
+}
+
+void StallverketProcessor::timerCallback()
+{
+    static juce::TimeSliceThread skrivTrad ("STALLVERKET skrivare");
+    auto& n = ledning::nav();
+    const int64_t id = n.recId.load();
+
+    // ny inspelning: öppna en fil för den här kanalen
+    if (id != 0 && id != oppenRecId && licens::upplast().load())
+    {
+        stangRec();
+        if (! skrivTrad.isThreadRunning()) skrivTrad.startThread();
+        auto mapp = recMapp (id);
+        mapp.createDirectory();
+        const int r = roll();
+        juce::String namn = juce::String (kanal() + 1).paddedLeft ('0', 2) + " " + (r < motor::NUM_ROLL ? motor::rollNamn (r) : "ORORD");
+        if (arCentral() && r >= motor::NUM_ROLL) namn = "MIX (CENTRAL)";
+        auto fil = mapp.getNonexistentChildFile (namn, ".wav", false);
+        std::unique_ptr<juce::OutputStream> ut (fil.createOutputStream());
+        juce::WavAudioFormat wav;
+        if (ut != nullptr)
+            if (auto* w = wav.createWriterFor (ut.get(), sr, 2, 24, {}, 0))
+            {
+                ut.release();
+                auto ny = std::make_unique<juce::AudioFormatWriter::ThreadedWriter> (w, skrivTrad, 1 << 16);
+                const juce::SpinLock::ScopedLockType lock (skrivLas);
+                skrivare = std::move (ny);
+            }
+        oppenRecId = id;
+        oppenRecIdAtomic.store (id);
+        skrivnaSampel.store (0);
+        recKlar.store (false);
+    }
+
+    // inspelningen är slut (stopptakten passerad, eller CENTRAL har nollställt)
+    if (oppenRecId != 0 && (id != oppenRecId || recKlar.load()))
+    {
+        stangRec();
+        // CENTRAL nollställer när den själv är klar, så att REC-knappen släcks
+        if (arCentral() && id != 0 && recKlar.load()) n.recId.store (0);
+    }
+    // står transporten när stopp trycks: stäng direkt
+    if (oppenRecId != 0 && n.recStopp.load() < -1.0e17)
+    {
+        stangRec();
+        if (arCentral()) n.recId.store (0);
+    }
 }
 
 //==============================================================================

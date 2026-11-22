@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_formats/juce_audio_formats.h>
 #include <atomic>
 #include "Motor.h"
 #include "Ledning.h"
@@ -12,7 +13,7 @@
 // Läggs på varje kanal som ska vara med i låten. En av dem är CENTRAL: den
 // håller motorn och inställningarna och skickar ut dem till de andra. Varje
 // instans (även CENTRAL) behandlar ljudet på sin egen kanal efter sin ROLL.
-class StallverketProcessor : public juce::AudioProcessor
+class StallverketProcessor : public juce::AudioProcessor, private juce::Timer
 {
 public:
     StallverketProcessor();
@@ -71,6 +72,13 @@ public:
     void slumpaFro();
     void slumpaAllt();
 
+    // ---- REC: varje kanal spelar in sin egen WAV på skrivbordet
+    void vaxlaRec();
+    bool spelarIn() const { return ledning::nav().recId.load() != 0; }
+    bool skriverNu() const { return skriver.load(); }
+    double recSekunder() const;
+    juce::File recMapp (int64_t id) const;
+
     // ---- presets
     int  antalFabrik() const;
     void laddaFabrik (int i);
@@ -104,6 +112,15 @@ private:
     std::atomic<int> autoRoll { -1 };
     double klocka = 0.0, forvantat = 0.0;
     juce::String skriftText;
+
+    void timerCallback() override;
+    void stangRec();
+    juce::SpinLock skrivLas;
+    std::unique_ptr<juce::AudioFormatWriter::ThreadedWriter> skrivare;
+    int64_t oppenRecId = 0;
+    std::atomic<bool> skriver { false }, recKlar { false };
+    std::atomic<int64_t> skrivnaSampel { 0 };
+    std::atomic<int64_t> oppenRecIdAtomic { 0 };
     std::atomic<int> skriftKod[32] {};
     std::atomic<int> skriftAntal { 0 };
     bool spelade = false;

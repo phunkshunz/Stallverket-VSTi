@@ -79,6 +79,9 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     slumpaFro.setTooltip (utf8 ("Nytt frö: samma mall och känsla, en helt ny låt."));
     slumpaAllt.setTooltip (utf8 ("Slumpar mall, frö och alla rattar."));
 
+    recKnapp.onClick = [this] { proc.vaxlaRec(); };
+    recKnapp.setTooltip (utf8 ("Spelar in varje kanal som en egen WAV på skrivbordet (mappen STÄLLVERKET inspelningar). Börjar och slutar på hel takt. Lägg CENTRAL på mastern med ROLL = ORÖRD för hela mixen."));
+    recKnapp.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffe0412f));
     breakNu.onClick = [this] { proc.taOver (motor::BREAK); };
     byggNu.onClick  = [this] { proc.taOver (motor::BYGG); };
     dropNu.onClick  = [this] { proc.taOver (motor::DROP); };
@@ -241,7 +244,7 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
 
     for (auto* c : std::initializer_list<juce::Component*> { &centralKnapp, &kanalVal, &rollVal, &mallVal, &formVal, &presetVal,
                                                              &presetFore, &presetNasta, &sparaKnapp, &slumpaFro, &slumpaAllt,
-                                                             &breakNu, &byggNu, &dropNu, &hallKnapp, &slappKnapp, &sprakKnapp,
+                                                             &breakNu, &byggNu, &dropNu, &hallKnapp, &slappKnapp, &recKnapp, &sprakKnapp,
                                                              &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &overgang, &midiKnapp })
         addChildComponent (c);
     for (auto& k : kanalDjup) addChildComponent (k);
@@ -296,7 +299,7 @@ void StallverketEditor::byggLayout()
     setSize (centralVy ? kCentralB : kKanalB, centralVy ? kCentralH : kKanalH);
 
     for (auto* c : std::initializer_list<juce::Component*> { &mallVal, &formVal, &presetVal, &presetFore, &presetNasta, &sparaKnapp,
-                                                             &slumpaFro, &slumpaAllt, &breakNu, &byggNu, &dropNu, &hallKnapp, &slappKnapp,
+                                                             &slumpaFro, &slumpaAllt, &breakNu, &byggNu, &dropNu, &hallKnapp, &slappKnapp, &recKnapp,
                                                              &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &overgang, &midiKnapp })
         c->setVisible (centralVy);
     for (auto* c : std::initializer_list<juce::Component*> { &centralKnapp, &kanalVal, &rollVal, &sprakKnapp }) c->setVisible (true);
@@ -458,8 +461,8 @@ void StallverketEditor::resized()
     for (int i = 7; i < 13; ++i) rattar[i]->setBounds (botten.removeFromLeft (kb).reduced (2, 0));
 
     knappar.removeFromLeft (10);
-    const int bh = (knappar.getHeight() - 4 * 6) / 5;
-    for (auto* b : { &breakNu, &byggNu, &dropNu, &hallKnapp, &slappKnapp })
+    const int bh = (knappar.getHeight() - 5 * 6) / 6;
+    for (auto* b : { &recKnapp, &breakNu, &byggNu, &dropNu, &hallKnapp, &slappKnapp })
     {
         b->setBounds (knappar.removeFromTop (bh));
         knappar.removeFromTop (6);
@@ -622,6 +625,11 @@ void StallverketEditor::ritaKanalvy (juce::Graphics& g, juce::Rectangle<int> yta
     const bool arC = proc.arCentral();
     auto status = r.removeFromTop (16);
     g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+    if (proc.spelarIn())
+    {
+        g.setColour (juce::Colour (0xffe0412f));
+        g.drawText (proc.skriverNu() ? sprak::trU ("● SPELAR IN") : sprak::trU ("REC: VÄNTAR PÅ TAKT"), status, juce::Justification::centredRight);
+    }
     if (lever && ! arC) { g.setColour (cold); g.drawText (sprak::trU ("FÖLJER CENTRAL"), status, juce::Justification::centredLeft); }
     else { g.setColour (sodium); g.drawText (sprak::trU ("INGEN CENTRAL HITTAD: KÖR PÅ SPARADE INSTÄLLNINGAR"), status, juce::Justification::centredLeft); }
 
@@ -707,6 +715,18 @@ void StallverketEditor::timerCallback()
 {
     if (proc.arCentral() != centralVy) byggLayout();
     hallKnapp.setToggleState (proc.haller(), juce::dontSendNotification);
+    {
+        const bool rec = proc.spelarIn();
+        recKnapp.setToggleState (rec, juce::dontSendNotification);
+        juce::String t = "REC";
+        if (rec)
+        {
+            const int sek = (int) proc.recSekunder();
+            t = proc.skriverNu() ? juce::String::fromUTF8 ("● REC ") + juce::String (sek / 60) + ":" + juce::String (sek % 60).paddedLeft ('0', 2)
+                                 : sprak::trU ("REC: VÄNTAR PÅ TAKT");
+        }
+        if (recKnapp.getButtonText() != t) recKnapp.setButtonText (t);
+    }
     const auto ov = ledning::nav().ovTyp.load();
     breakNu.setToggleState (ov == motor::BREAK, juce::dontSendNotification);
     byggNu.setToggleState (ov == motor::BYGG, juce::dontSendNotification);

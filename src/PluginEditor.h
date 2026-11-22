@@ -48,6 +48,7 @@ private:
 
     Knob fro, energi, variation, brytdjup, bygglangd, stok, filter, andas, dub, djup, pump, pumptid, overgang;
     juce::TextButton midiKnapp { "MIDI UT" };
+    juce::TextButton recKnapp { "REC" };
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> midiAtt;
     juce::Slider kanalDjup[ledning::kKanaler];
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> kanalDjupAtt[ledning::kKanaler];

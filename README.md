@@ -46,6 +46,10 @@ CENTRAL behandlar också ljudet på sin egen kanal, så den kan ligga på t.ex. 
 - **MALL**: bygg en egen mall. Längd per del, chanser (lyft, break, direkt bygg, direkt drop, klimax, utandning) och karaktär (hårda klipp, stök, dubkast, filter, atmo först). Välj **EGEN** i mallmenyn för att höra den. **KOPIERA MALL** tar mallen som spelar som startpunkt. Egna mallar sparas som `.stallmall` i `Dokument/Phunkshunz/STALLVERKET/Mallar`.
 - **SPARA MIDI**: sparar låten som MIDI-fil i `Dokument/Phunkshunz/STALLVERKET/Export` och visar den i Finder. Ett spår med delarna (markörer + noter C1 och uppåt) och ett spår per kanal med en not när kanalen spelar, plus nivå (CC 11), lågpass (CC 74) och högpass (CC 75). Dra in filen i Bitwig.
 
+## REC
+
+**REC** på CENTRAL spelar in varje kanal som en egen WAV-fil (24 bit) i `Skrivbord/STÄLLVERKET inspelningar/<datum och tid>/`, till exempel `01 KICK.wav`, `02 BAS.wav`. Alla börjar och slutar på samma hela takt, så filerna ligger exakt i linje när du drar in dem i en DAW. Trycker du REC när transporten står börjar inspelningen när du trycker play. Vill du ha hela mixen i en fil: lägg CENTRAL på mastern med ROLL = ORÖRD, då blir den `MIX (CENTRAL).wav`.
+
 ## Licens
 
 Fullversionen låses upp med en nyckel från Payhip. Klistra in den en gång, så hittar alla MASKINHALLEN-maskiner på datorn den. En bundle-nyckel låser upp allt. Utan nyckel går ljudet rakt igenom.

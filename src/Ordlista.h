@@ -174,5 +174,8 @@ inline constexpr Par kOrdlista[] =
     { "Allt tystnar ett halvt slag mitt i takten.", "Everything stops for half a beat mid-bar." },
     { "Hur ofta trick får hända. 0 = aldrig, 100 % = så ofta det går.", "How often tricks may happen. 0 = never, 100 % = as often as possible." },
     { "Mallen SKRIFTEN följer den här texten. I=INTRO G=GROOVE L=LYFT B=BREAK U=BYGG D=DROP K=KLIMAX A=UTANDNING O=OUTRO, siffra = takter.", "The SCRIPT template follows this text. I=INTRO G=GROOVE L=LIFT B=BREAK U=BUILD D=DROP K=CLIMAX A=COOLDOWN O=OUTRO, number = bars." },
+    { "REC: VÄNTAR PÅ TAKT", "REC: WAITING FOR BAR" },
+    { "● SPELAR IN", "● RECORDING" },
+    { "Spelar in varje kanal som en egen WAV på skrivbordet (mappen STÄLLVERKET inspelningar). Börjar och slutar på hel takt. Lägg CENTRAL på mastern med ROLL = ORÖRD för hela mixen.", "Records every channel as its own WAV on the desktop (folder STÄLLVERKET inspelningar). Starts and stops on a full bar. Put CENTRAL on the master with ROLE = UNTOUCHED to get the full mix." },
 };
 } // namespace sprak
