@@ -23,17 +23,18 @@ int main()
                     KOLL (p.s[(size_t) i].start == sum);
                     KOLL (p.s[(size_t) i].langd >= 4);
                     sum += p.s[(size_t) i].langd;
-                    if (p.s[(size_t) i].typ == BYGG)
-                        KOLL (i + 1 < p.n && (p.s[(size_t) i + 1].typ == DROP || p.s[(size_t) i + 1].typ == KLIMAX));
+                    if (p.s[(size_t) i].typ == BYGG && kMallar[mall].sarskild != S_SKRIFT)
+                        KOLL (i + 1 < p.n && (p.s[(size_t) i + 1].typ == DROP || p.s[(size_t) i + 1].typ == KLIMAX
+                                              || (kMallar[mall].sarskild == S_FALSKT && p.s[(size_t) i + 1].typ == BREAK)));
                 }
                 KOLL (sum == p.takter);
-                if (form > 0)
+                if (form > 0 && kMallar[mall].sarskild != S_SKRIFT)
                 {
                     KOLL (p.s[(size_t) p.n - 1].typ == OUTRO);
                     KOLL (p.takter <= kFormTakter[form] + 16);
                     KOLL (p.takter >= kFormTakter[form] - 8);
                 }
-                else KOLL (p.takter > 2000);
+                else if (kMallar[mall].sarskild != S_SKRIFT) KOLL (p.takter > 2000);
                 const Plan q = byggPlan (in);
                 KOLL (q.n == p.n && q.takter == p.takter);
                 Overstyr o;
@@ -42,7 +43,7 @@ int main()
                     {
                         const auto a = atgard (p, in, o, r, r, sl);
                         KOLL (a.niva >= 0 && a.niva <= 1.0001f && a.lp >= 0 && a.lp <= 1.0001f && a.hp >= 0 && a.hp <= 1.0001f);
-                        KOLL (a.stutter == 0 || a.stutter == 0.5f || a.stutter == 1 || a.stutter == 2 || a.stutter == 4);
+                        KOLL (a.stutter == 0 || a.stutter == 0.25f || a.stutter == 0.5f || a.stutter == 1 || a.stutter == 2 || a.stutter == 4);
                     }
             }
 
@@ -62,6 +63,14 @@ int main()
     KOLL (atgard (p, in, o, 0, KICK, 41 * 4 + 1).niva == 0.0f);
     Overstyr h; h.hall = true; h.hallStart = 16; h.hallLangd = 8; h.hallTyp = KLIMAX;
     KOLL (aktuell (p, h, 100, tid).typ == KLIMAX && tid == (100 - 16) % 8);
+
+    // SKRIFTEN
+    {
+        Installning sk; sk.mall = 14; sk.skriftN = lasSkrift ("I8 G16 B U4 D", sk.skrift, 32);
+        KOLL (sk.skriftN == 5);
+        const Plan ps = byggPlan (sk);
+        KOLL (ps.s[0].typ == INTRO && ps.s[0].langd == 8 && ps.s[3].typ == BYGG && ps.s[3].langd == 4 && ps.s[5].typ == INTRO);
+    }
 
     // EGEN mall + energikurva
     {

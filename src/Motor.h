@@ -51,6 +51,7 @@ inline float slump01 (uint32_t h) { return (float) (blanda (h) & 0xffffff) / 167
 
 //==============================================================================
 // MALLAR: olika sätt att bygga en låt.
+enum Sarskild { S_INGEN, S_SPEGEL, S_STAPLA, S_FALSKT, S_DUELL, S_TELEFON, S_SVARM, S_SKRIFT };
 struct Mall
 {
     const char* namn;
@@ -61,6 +62,7 @@ struct Mall
     float dub;      // extra dubkast
     float filter;   // extra filterrörelse
     bool  atmoForst;// atmo/synt kommer in först i intro i stället för kicken
+    int   sarskild = 0; // mallar med eget beteende, se Sarskild
 };
 
 //                      namn          IN GR LY BR BY DR KL UT OU   lyft  brk   byggD dropD klmx  utand  hård stök dub  filt atmo
@@ -74,6 +76,14 @@ inline constexpr Mall kMallar[] =
     { "STÖK",        {  8, 8, 8, 8, 4, 8, 8, 8, 8 }, 0.30f,0.40f,0.30f,0.30f,0.55f,0.20f, 0.9f,1.0f,0.2f,0.5f, false },
     { "DUB",         { 32,32,16,32,16,32,32,32,32 }, 0.30f,0.50f,0.05f,0.35f,0.25f,0.45f, 0.1f,0.1f,1.0f,0.7f, true  },
     { "BERG-O-DAL",  { 16,16,16,32,32,16,32,16,16 }, 0.15f,0.60f,0.05f,0.05f,0.75f,0.20f, 0.6f,0.5f,0.3f,0.9f, true  },
+    // mallar med eget beteende
+    { "SPEGEL",      { 16,32,16,16, 8,16,32,16,16 }, 0.35f,0.40f,0.15f,0.15f,0.50f,0.30f, 0.5f,0.3f,0.2f,0.5f, false, S_SPEGEL },
+    { "STAPLA",      { 16,64,16, 4, 8,16,32,16,16 }, 0.05f,0.90f,0.03f,0.70f,0.30f,0.10f, 1.0f,0.3f,0.1f,0.3f, false, S_STAPLA },
+    { "FALSKT DROP", { 16,32,16,16, 8,16,32,16,16 }, 0.20f,0.40f,0.35f,0.10f,0.40f,0.20f, 0.8f,0.5f,0.2f,0.5f, false, S_FALSKT },
+    { "DUELL",       { 16,32,16,16, 8,16,32,16,16 }, 0.35f,0.35f,0.15f,0.20f,0.50f,0.30f, 0.6f,0.3f,0.3f,0.5f, false, S_DUELL },
+    { "TELEFON",     { 16,32,16,16,16,32,32,16,16 }, 0.30f,0.35f,0.25f,0.10f,0.60f,0.25f, 0.3f,0.2f,0.4f,0.6f, true,  S_TELEFON },
+    { "SVÄRM",       {  8,16, 8, 8, 8,16,16, 8, 8 }, 0.30f,0.35f,0.25f,0.25f,0.50f,0.20f, 0.9f,0.6f,0.2f,0.4f, false, S_SVARM },
+    { "SKRIFTEN",    { 16,32,16,16, 8,16,32,16,16 }, 0.35f,0.40f,0.15f,0.15f,0.50f,0.30f, 0.5f,0.3f,0.2f,0.5f, false, S_SKRIFT },
 };
 inline constexpr int kAntalMallar = (int) (sizeof (kMallar) / sizeof (kMallar[0]));
 
@@ -101,7 +111,16 @@ struct Installning
     int      kurvTakter = 512;
     float    kurva[8]  { 0.3f, 0.45f, 0.6f, 0.7f, 0.85f, 1.0f, 0.7f, 0.4f };
 
-    uint32_t extra = 0;         // hash av egen mall + kurva, så att jämförelsen nedan märker ändringar
+    // TRICK: vilka effekter som är på (bitar, se Trick) och hur ofta de händer
+    uint32_t trick      = 0xFFFu;
+    float    trickMangd = 0.5f;
+    uint32_t levande    = 0;    // vilka kanaler som har ljud (för TOMRUM), styr inte planen
+
+    // SKRIFTEN: följd av delar, typ << 8 | längd (0 = mallens längd)
+    int      skrift[32] {};
+    int      skriftN = 0;
+
+    uint32_t extra = 0;         // hash av egen mall, kurva, trick och skrift, så att jämförelsen nedan märker ändringar
 
     bool operator== (const Installning& o) const
     {
@@ -111,6 +130,36 @@ struct Installning
     }
     bool operator!= (const Installning& o) const { return ! (*this == o); }
 };
+
+enum Trick : uint32_t
+{
+    T_FRYS = 1u << 0, T_HALVTID = 1u << 1, T_BAKBREAK = 1u << 2, T_VINYL = 1u << 3, T_RADIO = 1u << 4, T_EKO = 1u << 5,
+    T_TOMRUM = 1u << 6, T_STAM = 1u << 7, T_GLAPP = 1u << 8, T_BYT = 1u << 9, T_SPOKE = 1u << 10, T_STOPP = 1u << 11
+};
+inline constexpr int kAntalTrick = 12;
+
+// SKRIFTEN: "I16 G32 B U D K" -> delar. I=INTRO G=GROOVE L=LYFT B=BREAK U=BYGG (upp) D=DROP K=KLIMAX A=UTANDNING O=OUTRO
+inline int lasSkrift (const char* txt, int* ut, int max)
+{
+    int n = 0;
+    for (const char* c = txt; *c && n < max; ++c)
+    {
+        int typ = -1;
+        switch (*c | 0x20)
+        {
+            case 'i': typ = INTRO; break;  case 'g': typ = GROOVE; break; case 'l': typ = LYFT; break;
+            case 'b': typ = BREAK; break;  case 'u': typ = BYGG; break;   case 'd': typ = DROP; break;
+            case 'k': typ = KLIMAX; break; case 'a': typ = UTANDNING; break; case 'o': typ = OUTRO; break;
+            default: break;
+        }
+        if (typ < 0) continue;
+        int l = 0;
+        while (c[1] >= '0' && c[1] <= '9') { l = l * 10 + (c[1] - '0'); ++c; }
+        if (l > 0) l = l < 4 ? 4 : (l > 128 ? 128 : l);
+        ut[n++] = (typ << 8) | l;
+    }
+    return n;
+}
 
 inline const Mall& mallFor (const Installning& in)
 {
@@ -220,14 +269,9 @@ inline Plan byggPlan (const Installning& in)
         ++p.n;
     };
 
-    const int outro = p.form ? tvapotens ((float) m.langd[OUTRO] * skala, 4, 16) : m.langd[OUTRO];
-    lagg (INTRO, p.form ? tvapotens ((float) m.langd[INTRO] * skala, 4, 16) : langdFor (INTRO));
-    int cur = INTRO, grooveIRad = 0;
-
-    while (p.n < Plan::kMax - 3)
+    int grooveIRad = 0;
+    auto valj = [&] (int cur)
     {
-        if (p.form && p.takter >= formTakter - outro) break;
-
         uppdateraEnergi (p.takter);
         int nx = GROOVE;
         const float x = nasta();
@@ -250,6 +294,68 @@ inline Plan byggPlan (const Installning& in)
             default:        nx = GROOVE; break;
         }
         grooveIRad = (nx == GROOVE) ? grooveIRad + 1 : 0;
+        return nx;
+    };
+
+    // ---- SKRIFTEN: följer den skrivna följden, om och om igen
+    if (m.sarskild == S_SKRIFT && in.skriftN > 0)
+    {
+        int i = 0;
+        while (p.n < Plan::kMax - 1 && (! p.form || p.takter < formTakter))
+        {
+            const int typ = in.skrift[i] >> 8, l = in.skrift[i] & 255;
+            lagg (typ, l > 0 ? l : langdFor (typ));
+            if (++i >= in.skriftN) i = 0;
+        }
+        return p;
+    }
+
+    // ---- SPEGEL: bygger upp, sedan samma väg tillbaka baklänges
+    if (m.sarskild == S_SPEGEL)
+    {
+        const int halv = p.form ? formTakter / 2 : 64;
+        bool forsta = true;
+        while (p.n < Plan::kMax - 60)
+        {
+            const int start = p.n;
+            const int64_t startTakt = p.takter;
+            int c = forsta ? INTRO : GROOVE;
+            lagg (c, p.form ? tvapotens ((float) m.langd[c] * skala, 4, 16) : langdFor (c));
+            while (p.takter - startTakt < halv && p.n < Plan::kMax - 60)
+            {
+                c = valj (c);
+                int l = langdFor (c);
+                if (p.form)
+                {
+                    const int kvar = halv - (int) (p.takter - startTakt);
+                    if (kvar < 4) break;
+                    if (l > kvar) l = tvapotens ((float) kvar, 4, kvar);
+                    if (c == BYGG && kvar - l < 4) c = GROOVE;
+                }
+                lagg (c, l);
+            }
+            if (p.s[(size_t) p.n - 1].typ == BYGG) p.s[(size_t) p.n - 1].typ = GROOVE;
+            const int slut = p.n;
+            for (int i = slut - 1; i >= start; --i)
+            {
+                int t = p.s[(size_t) i].typ;
+                if (t == INTRO) t = OUTRO; else if (t == BYGG) t = UTANDNING;
+                lagg (t, p.s[(size_t) i].langd);
+            }
+            forsta = false;
+            if (p.form) break;
+        }
+        return p;
+    }
+
+    const int outro = p.form ? tvapotens ((float) m.langd[OUTRO] * skala, 4, 16) : m.langd[OUTRO];
+    lagg (INTRO, p.form ? tvapotens ((float) m.langd[INTRO] * skala, 4, 16) : langdFor (INTRO));
+    int cur = INTRO;
+
+    while (p.n < Plan::kMax - 4)
+    {
+        if (p.form && p.takter >= formTakter - outro) break;
+        int nx = valj (cur);
 
         int l = langdFor (nx);
         if (p.form)
@@ -260,6 +366,10 @@ inline Plan byggPlan (const Installning& in)
             // en BYGG ska alltid följas av något: hinns det inte, blir det GROOVE
             if (nx == BYGG && kvar - l < 8) nx = GROOVE;
         }
+        // FALSKT DROP: efter uppbyggnaden kommer ett break i stället, droppet sen
+        if (m.sarskild == S_FALSKT && cur == BYGG && (nx == DROP || nx == KLIMAX)
+            && (! p.form || formTakter - outro - (int) p.takter - l >= 8))
+            lagg (BREAK, p.form ? 4 : 8);
         lagg (nx, l);
         cur = nx;
     }
@@ -338,6 +448,12 @@ struct Atgard
     float    ton     = 1.0f;    // stutterns uppspelningshastighet (2 = en oktav upp)
     bool     tapeStop = false;  // bandet saktar in och stannar
     float    rum     = 0.0f;    // skick till rummet (reverb-svall)
+    float    frys    = 0.0f;    // FRYS: biten precis innan låses och ringer vidare (nivå)
+    bool     halvtid = false;   // HALVTID: spelar i halv hastighet
+    bool     bakLang = false;   // BAKLÄNGES-BREAK: allt spelas baklänges från breakets start
+    float    tapeLangd = 1.0f;  // tape stop: hur många slag inbromsningen tar (VINYLBROMS = en takt)
+    bool     glapp   = false;   // BANDGLAPP: tonhöjden dippar som ett slirande band
+    bool     byt     = false;   // KANALBYTE: vänster och höger byter plats
 };
 
 inline uint16_t grindMonster (uint32_t h, float tathet)
@@ -565,6 +681,153 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
         {
             if (roll != ATMO && roll != FX) a.tapeStop = true;
             a.rum = std::fmax (a.rum, in.overgang * 0.6f);
+        }
+    }
+
+    // ================================================================ mallar med eget beteende
+    switch (m.sarskild)
+    {
+        case S_STAPLA:
+            if (s.typ == GROOVE)
+            {
+                // en kanal i taget kommer in, sedan raseras allt i breaket
+                const int ord = intrADning (roll, m.atmoForst);
+                const int steg = s.langd / 8 > 0 ? s.langd / 8 : 1;
+                a.niva = tid >= (int64_t) ord * steg ? 1.0f : 0.0f;
+                a.lp = 1.0f; a.hard = true;
+            }
+            if (s.typ == BREAK) { a.niva = (roll == ATMO || roll == VOX) ? 1.0f : 0.0f; a.hard = true; }
+            break;
+
+        case S_DUELL:
+            if (s.typ == GROOVE || s.typ == LYFT || s.typ == KLIMAX || s.typ == UTANDNING)
+            {
+                // fråga och svar: grupp A har två takter, grupp B nästa två
+                const bool aTur = ((tid / 2) % 2) == 0;
+                const bool grA = roll == SYNT || roll == VOX || roll == FX || roll == ATMO;
+                const bool grB = roll == PERC || roll == LOOP || roll == CLAP;
+                if ((grA && ! aTur) || (grB && aTur)) a.niva = 0.0f;
+                if (roll == HATS && aTur) a.niva *= 0.5f;
+            }
+            break;
+
+        case S_TELEFON:
+            if (s.typ == BYGG)    { a.lp = std::fmin (a.lp, 0.45f + 0.55f * t); a.hp = std::fmax (a.hp, 0.4f * (1.0f - t)); }
+            else if (s.typ != DROP && s.typ != KLIMAX) { a.lp = std::fmin (a.lp, 0.45f); a.hp = std::fmax (a.hp, 0.4f); }
+            break;
+
+        case S_SVARM:
+            if (s.typ == GROOVE || s.typ == LYFT || s.typ == KLIMAX || s.typ == UTANDNING)
+            {
+                const float pa = roll == KICK ? 0.92f : 0.5f + 0.3f * energiVid (in, takt);
+                a.niva = slump01 (blanda (hk, (uint32_t) tid, 0x5A)) < pa ? 1.0f : 0.0f;
+                a.hard = true;
+            }
+            break;
+
+        default: break;
+    }
+
+    // ================================================================ TRICK
+    auto valjTrick = [&] (uint32_t h, std::initializer_list<uint32_t> lista) -> uint32_t
+    {
+        uint32_t ok[8]; int n = 0;
+        for (auto b : lista) if ((in.trick & b) && n < 8) ok[n++] = b;
+        return n > 0 ? ok[blanda (h) % (uint32_t) n] : 0u;
+    };
+    const double sptD = (double) slagPerTakt;
+
+    // ---- breakeffekter: en per break
+    if (s.typ == BREAK && slump01 (s.h + 71) < in.trickMangd)
+    {
+        const uint32_t ef = valjTrick (s.h + 72, { T_FRYS, T_HALVTID, T_BAKBREAK, T_TOMRUM, T_RADIO });
+        const bool tung = roll == KICK || roll == BAS;
+        if (ef == T_FRYS && ! tung && posIDel < 2.0 * sptD)
+        {
+            a.frys = (float) (1.0 - posIDel / (2.0 * sptD));
+            a.niva *= 0.4f;
+        }
+        else if (ef == T_HALVTID && ! tung)
+        {
+            a.halvtid = true;
+            if (roll == LOOP || roll == PERC) a.niva = std::fmax (a.niva, 0.8f);
+        }
+        else if (ef == T_BAKBREAK && roll != KICK)
+        {
+            a.bakLang = true;
+            a.niva = std::fmax (a.niva, roll == BAS ? 0.5f : 0.7f);
+        }
+        else if (ef == T_TOMRUM)
+        {
+            // bara en kanal får vara kvar, ensam i rummet
+            int antal = 0, val = -1;
+            for (int i = 0; i < 32; ++i) if (in.levande & (1u << i)) ++antal;
+            if (antal > 0)
+            {
+                int k = (int) (blanda (s.h + 73) % (uint32_t) antal);
+                for (int i = 0; i < 32; ++i) if (in.levande & (1u << i)) { if (k-- == 0) { val = i; break; } }
+                if (kanal == val) { a.niva = 1.0f; a.lp = 1.0f; a.hp = 0.0f; a.rum = std::fmax (a.rum, 0.35f); }
+                else { a.niva = 0.0f; a.dub = 0.0f; }
+            }
+        }
+        else if (ef == T_RADIO && posIDel < 2.0 * sptD)
+        {
+            const uint32_t hr = blanda (hk, (uint32_t) std::floor (posIDel * 2.0), 0xAD10);
+            if (slump01 (hr) < 0.5f) { a.lp = 0.35f; a.hp = 0.45f; } else { a.lp = 1.0f; a.hp = 0.0f; }
+            if (roll != KICK) a.niva = std::fmax (a.niva, 0.7f);
+            a.hard = true;
+        }
+    }
+
+    // ---- slutet av uppbyggnaden: VINYLBROMS eller KORT EKO
+    if (s.typ == BYGG && slump01 (s.h + 81) < in.trickMangd)
+    {
+        const uint32_t ef = valjTrick (s.h + 82, { T_VINYL, T_EKO });
+        if (ef == T_VINYL && slagKvar <= sptD)
+        {
+            a.tapeStop = true; a.tapeLangd = (float) sptD;
+            a.stutter = 0.0f; a.bak = false;
+            a.niva = std::fmax (a.niva, 0.8f);
+        }
+        else if (ef == T_EKO && slagKvar <= 2.0 && roll != KICK && roll != BAS)
+        {
+            a.stutter = slagKvar > 1.0 ? 1.0f : (slagKvar > 0.5 ? 0.5f : 0.25f);
+            a.ton = 1.0f; a.bak = false;
+            a.niva = (float) (0.5 + 0.5 * (1.0 - slagKvar / 2.0));
+        }
+    }
+
+    // ---- grooveknep: högst ett per takt, aldrig i frasens sista takt
+    if ((s.typ == GROOVE || s.typ == LYFT || s.typ == KLIMAX || s.typ == UTANDNING || (s.typ == DROP && tid >= 1))
+        && (tid % 8) != 7)
+    {
+        const uint32_t hb = blanda (s.h, (uint32_t) tid, 0x7A1C);
+        if (slump01 (hb) < in.trickMangd * 0.35f)
+        {
+            const uint32_t ef = valjTrick (hb + 1, { T_STAM, T_GLAPP, T_BYT, T_SPOKE, T_STOPP });
+            if (ef == T_STAM)
+            {
+                const double w = (double) (blanda (hb + 2) % (uint32_t) (slagPerTakt * 2)) * 0.5;
+                const bool med = (roll == HATS || roll == PERC || roll == LOOP || roll == SYNT || roll == CLAP || roll == VOX)
+                                 && slump01 (blanda (hb + 3, (uint32_t) roll)) < 0.6f;
+                if (med && iTakt >= w && iTakt < w + 0.5) a.stutter = 0.5f;
+            }
+            else if (ef == T_GLAPP && roll != KICK)
+            {
+                const int b = (int) (blanda (hb + 4) % (uint32_t) slagPerTakt);
+                if ((int) std::floor (iTakt) == b) a.glapp = true;
+            }
+            else if (ef == T_BYT) a.byt = true;
+            else if (ef == T_SPOKE)
+            {
+                static const int vemLista[] = { SYNT, PERC, LOOP, VOX, CLAP, ATMO };
+                if (roll == vemLista[blanda (hb + 5) % 6]) { a.niva = 0.0f; a.dub = 1.0f; }
+            }
+            else if (ef == T_STOPP)
+            {
+                const double b2 = 1.0 + (double) (blanda (hb + 6) % (uint32_t) (slagPerTakt > 1 ? slagPerTakt - 1 : 1));
+                if (iTakt >= b2 && iTakt < b2 + 0.5) { a.niva = 0.0f; a.hard = true; }
+            }
         }
     }
 

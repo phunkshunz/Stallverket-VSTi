@@ -17,7 +17,7 @@
 namespace ledning
 {
 inline constexpr int kKanaler = 16;
-inline constexpr int kInst = 64;     // antal värden som skickas från CENTRAL
+inline constexpr int kInst = 96;     // antal värden som skickas från CENTRAL
 
 struct Kanal
 {
@@ -48,9 +48,13 @@ struct Nav
     // var CENTRAL är i låten (för KANAL-displayen när den inte spelar själv)
     std::atomic<double>   slag { 0.0 };
 
+    // SKRIFTEN från CENTRAL
+    std::atomic<int>      skrift[32];
+    std::atomic<int>      skriftN { 0 };
+
     Kanal kanal[kKanaler];
 
-    Nav() { for (auto& v : inst) v.store (0.0f); }
+    Nav() { for (auto& v : inst) v.store (0.0f); for (auto& v : skrift) v.store (0); }
 };
 
 inline Nav& nav()

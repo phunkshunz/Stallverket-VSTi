@@ -34,7 +34,13 @@ CENTRAL behandlar också ljudet på sin egen kanal, så den kan ligga på t.ex. 
 - **BREAK NU / BYGG NU / DROP NU**: ta över från nästa takt. **HÅLL**: loopa delen som spelar nu. **SLÄPP**: motorn kör vidare själv.
 - Tidslinjen visar delarna och vad varje kanal gör de kommande 56 takterna.
 
-## Flikarna LÅTEN, KURVA och MALL
+## Flikarna LÅTEN, KURVA, MALL och TRICK
+
+- **TRICK**: roliga effekter som motorn kastar in själv. Tänd = får hända, **HUR OFTA** styr hur ofta.
+  - *I breaket* (ett per break): FRYS, HALVTID, BAKLÄNGES, TOMRUM, RADIOBYTE
+  - *In i droppet* (ett per uppbyggnad): VINYLBROMS, KORT EKO
+  - *I groovet* (ibland, en takt i taget): STAMNING, BANDGLAPP, KANALBYTE, SPÖKEKO, STOPP-SLAG
+- **Nya mallar**: SPEGEL (bygger upp och samma väg tillbaka), STAPLA (en kanal i taget, sedan ras), FALSKT DROP (uppbyggnad, sedan break, droppet efter), DUELL (fråga och svar mellan kanaler), TELEFON (allt i telefonlur tills droppet), SVÄRM (element tänds och släcks hela tiden), SKRIFTEN (följer texten du skriver under TRICK, t.ex. `I16 G32 B16 U8 D16 K32 O16`).
 
 - **KURVA**: rita energin över hela setet med åtta punkter (128 till 2048 takter, 512 takter är ungefär en timme i 130 BPM). Tänd **KURVA PÅ**, så ersätter kurvan ENERGI-ratten: lågt = fler breaks och färre element, högt = fler klimax.
 - **MALL**: bygg en egen mall. Längd per del, chanser (lyft, break, direkt bygg, direkt drop, klimax, utandning) och karaktär (hårda klipp, stök, dubkast, filter, atmo först). Välj **EGEN** i mallmenyn för att höra den. **KOPIERA MALL** tar mallen som spelar som startpunkt. Egna mallar sparas som `.stallmall` i `Dokument/Phunkshunz/STALLVERKET/Mallar`.

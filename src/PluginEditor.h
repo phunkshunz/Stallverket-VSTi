@@ -54,7 +54,15 @@ private:
     juce::TooltipWindow tips { this, 700 };
 
     // flikar i tidslinjen
-    juce::TextButton flikLat, flikKurva, flikMall, exportKnapp;
+    juce::TextButton flikLat, flikKurva, flikMall, flikTrick, exportKnapp;
+    // trick
+    juce::TextButton trickKnapp[motor::kAntalTrick];
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> trickAtt[motor::kAntalTrick];
+    juce::Slider trickMangd;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> trickMangdAtt;
+    juce::TextEditor skriftFalt;
+    juce::Rectangle<int> trickRub[4], skriftYta;
+    void ritaTrick (juce::Graphics&);
     // kurva
     juce::TextButton kurvaPa { "KURVA PÅ" };
     juce::ComboBox kurvLangd;

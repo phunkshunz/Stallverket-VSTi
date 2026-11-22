@@ -88,6 +88,10 @@ public:
     bool laddaMall (const juce::File& f);
     juce::File exporteraMidi();
 
+    // ---- SKRIFTEN
+    void sattSkrift (const juce::String& txt);
+    juce::String skrift() const { return skriftText; }
+
 private:
     void satt (const juce::String& id, float verkligt);
     float las (const char* id) const;
@@ -99,6 +103,9 @@ private:
     lyssna::Lyssnare lyssnare;
     std::atomic<int> autoRoll { -1 };
     double klocka = 0.0, forvantat = 0.0;
+    juce::String skriftText;
+    std::atomic<int> skriftKod[32] {};
+    std::atomic<int> skriftAntal { 0 };
     bool spelade = false;
     std::vector<float> monoBuf;
     motor::Plan plan;

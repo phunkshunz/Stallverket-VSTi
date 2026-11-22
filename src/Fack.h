@@ -109,6 +109,7 @@ public:
         raknare = 0;
         rum.forbered (sr);
         tapeAktiv = false; rumN = 0;
+        halvAktiv = bakLangAktiv = frysAktiv = false; frysN = 0; bytN = 0; glappN = 0;
     }
 
     // Kör ett block. slag0 = position i slag vid första samplet, slagPerSampel = tempo.
@@ -198,6 +199,38 @@ public:
             }
             else stutterAktiv = false;
 
+            // ---- BANDGLAPP: läser lite efter, med en fördröjning som sväller och krymper = tonhöjden dippar
+            if (d > 0.5f && a.glapp && ! stut)
+            {
+                const double len = std::max (64.0, sampelPerSlag);
+                const double fas = std::fmod ((double) glappN / len, 1.0);
+                const double s = std::sin (3.14159265 * fas);
+                lasRing ((double) skriv - s * s * sr * 0.012, xL, xR);
+                ++glappN;
+            }
+            else glappN = 0;
+
+            // ---- HALVTID: spelar från breakets start i halv hastighet (en oktav ner)
+            if (d > 0.5f && a.halvtid && ! stut)
+            {
+                if (! halvAktiv) { halvAktiv = true; halvAnkare = skriv; halvN = 0; }
+                lasRing ((double) halvAnkare + halvN * 0.5, xL, xR);
+                ++halvN;
+            }
+            else halvAktiv = false;
+
+            // ---- BAKLÄNGES-BREAK: allt som spelade innan breaket, baklänges
+            if (d > 0.5f && a.bakLang && ! stut)
+            {
+                if (! bakLangAktiv) { bakLangAktiv = true; bakLangAnkare = skriv; bakLangN = 0; }
+                const int k = bakLangN % (ringLen - 1);
+                lasRing ((double) bakLangAnkare - 1 - k, xL, xR);
+                const float env = std::min (1.0f, (float) bakLangN / (sr * 0.01f));
+                xL *= env; xR *= env;
+                ++bakLangN;
+            }
+            else bakLangAktiv = false;
+
             // ---- baklänges: förra slaget bakåt, tonar upp
             if (bak)
             {
@@ -217,7 +250,7 @@ public:
             if (d > 0.5f && a.tapeStop)
             {
                 if (! tapeAktiv) { tapeAktiv = true; tapeAnkare = skriv; tapePos = 0.0; tapeN = 0; }
-                const double len = std::max (64.0, sampelPerSlag);
+                const double len = std::max (64.0, sampelPerSlag * std::max (0.25f, a.tapeLangd));
                 const double fas = std::min (1.0, (double) tapeN / len);
                 const double fart = 1.0 - fas;                       // 1 -> 0
                 tapePos += fart * fart * 0.5 + fart * 0.5;           // tappar fart mjukt
@@ -268,8 +301,36 @@ public:
                 rumSvans = rumN > 0.0005f ? (int) (sr * 4.0f) : rumSvans - 1;
             }
 
-            float oL = xL * gain * pumpN + eL + rL;
-            float oR = xR * gain * pumpN + eR + rR;
+            // ---- FRYS: 60 ms precis innan låses och loopas mjukt med två överlappande läshuvuden
+            float fL = 0.0f, fR = 0.0f;
+            if (d > 0.5f && a.frys > 0.001f)
+            {
+                const int L60 = std::max (256, (int) (sr * 0.06f));
+                if (! frysAktiv) { frysAktiv = true; frysAnkare = skriv - L60 - 1; frysN = 0; }
+                for (int h = 0; h < 2; ++h)
+                {
+                    const int fas = (frysN + h * (L60 / 2)) % L60;
+                    const float w = 0.5f - 0.5f * std::cos (6.2831853f * (float) fas / (float) L60);
+                    float l, r;
+                    lasRing ((double) frysAnkare + fas, l, r);
+                    fL += l * w; fR += r * w;
+                }
+                fL *= a.frys; fR *= a.frys;
+                ++frysN;
+            }
+            else frysAktiv = false;
+
+            float oL = xL * gain * pumpN + eL + rL + fL;
+            float oR = xR * gain * pumpN + eR + rR + fR;
+
+            // ---- KANALBYTE: vänster och höger byter plats, mjukt
+            bytN += 0.001f * ((a.byt && d > 0.5f ? 1.0f : 0.0f) - bytN);
+            if (bytN > 0.0005f)
+            {
+                const float b = bytN, l0 = oL, r0 = oR;
+                oL = l0 * (1.0f - b) + r0 * b;
+                oR = r0 * (1.0f - b) + l0 * b;
+            }
 
             // mix: hur mycket av maskinen som hörs mot originalet
             L[i] = inL + (oL - inL) * mix;
@@ -308,6 +369,9 @@ private:
     bool tapeAktiv = false;
     int tapeAnkare = 0, tapeN = 0;
     double tapePos = 0;
+    bool halvAktiv = false, bakLangAktiv = false, frysAktiv = false;
+    int halvAnkare = 0, halvN = 0, bakLangAnkare = 0, bakLangN = 0, frysAnkare = 0, frysN = 0, glappN = 0;
+    float bytN = 0;
     bool stutterAktiv = false, bakAktiv = false;
     float stutterLangd = 0;
     double stutterBit = 0;

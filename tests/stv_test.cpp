@@ -22,9 +22,9 @@ int main (int argc, char** argv)
     Spelhuvud ph;
     for (auto* p : { &a, &b, &c }) { p->setPlayHead (&ph); p->prepareToPlay (48000, 512); }
     std::printf ("a central=%d kanal=%d | b central=%d kanal=%d | c kanal=%d\n", a.arCentral(), a.kanal(), b.arCentral(), b.kanal(), c.kanal());
-    b.state.getParameter ("roll")->setValueNotifyingHost (b.state.getParameter ("roll")->convertTo0to1 (1));
+    // b står kvar på AUTO och får en trumloop (kick + hats)
     c.state.getParameter ("roll")->setValueNotifyingHost (c.state.getParameter ("roll")->convertTo0to1 (5));
-    a.laddaFabrik (1);
+    a.laddaFabrik (41);  // ett preset med ny mall
     juce::AudioBuffer<float> buf (2, 512);
     juce::MidiBuffer m;
     juce::Random rnd (1);
@@ -33,7 +33,17 @@ int main (int argc, char** argv)
     {
         for (auto* p : { &a, &b, &c })
         {
-            for (int ch = 0; ch < 2; ++ch) for (int i = 0; i < 512; ++i) buf.setSample (ch, i, (rnd.nextFloat() - 0.5f) * 0.5f);
+            for (int ch = 0; ch < 2; ++ch) for (int i = 0; i < 512; ++i)
+            {
+                float x = (rnd.nextFloat() - 0.5f) * 0.5f;
+                if (p == &b)
+                {
+                    const double sl = ph.ppq + i * 130.0 / 60.0 / 48000.0, fas = sl - std::floor (sl), t = fas * 60.0 / 130.0;
+                    const double f8 = std::fmod (sl * 4.0, 1.0) * 60.0 / 130.0 / 4.0;
+                    x = (float) (std::sin (6.283 * 55.0 * t) * std::exp (-t * 10.0) * 0.7 + (rnd.nextFloat() - 0.5f) * std::exp (-f8 * 90.0) * 0.15);
+                }
+                buf.setSample (ch, i, x);
+            }
             m.clear();
             p->processBlock (buf, m);
             if (p == &a) midiN += m.getNumEvents();
@@ -42,7 +52,7 @@ int main (int argc, char** argv)
         ph.ppq += 512.0 * 130.0 / 60.0 / 48000.0;
         if (ph.ppq >= 16.0) ph.ppq -= 16.0;   // DAW:en loopar 4 takter
     }
-    std::printf ("takt efter 3 min med 4-taktsloop: %d (ska vara ~97)  roll c: %d\n", (int) (a.slagNu() / 4), c.roll());
+    std::printf ("takt efter 3 min med 4-taktsloop: %d (ska vara ~97)  roll c: %d  roll b (AUTO, trumloop): %s  roll a (AUTO, brus): %s\n", (int) (a.slagNu() / 4), c.roll(), motor::rollNamn (b.roll()), motor::rollNamn (a.roll()));
     std::printf ("NaN: %lld  max: %.3f  följer b mall=%d  MIDI-händelser: %lld\n", (long long) nan, maxv, b.installning().mall, (long long) midiN);
     a.taOver (motor::BYGG);
     const auto mid = a.exporteraMidi();
@@ -62,7 +72,7 @@ int main (int argc, char** argv)
         juce::PNGImageFormat().writeImageToStream (img, os);
         std::printf ("%s %dx%d\n", f.getFullPathName().toRawUTF8(), img.getWidth(), img.getHeight());
         if (p == &a)
-            for (auto* namn : { "CURVE", "TEMPLATE" })
+            for (auto* namn : { "CURVE", "TEMPLATE", "TRICKS" })
                 for (auto* c : ed->getChildren())
                     if (auto* b = dynamic_cast<juce::TextButton*> (c); b != nullptr && b->getButtonText() == namn && b->onClick)
                     {

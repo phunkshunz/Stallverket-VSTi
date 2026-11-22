@@ -14,8 +14,11 @@ const char* const kInstId[] = { "mall", "fro", "form", "energi", "variation", "b
                                 "kurva", "kurvalangd", "k1", "k2", "k3", "k4", "k5", "k6", "k7", "k8",
                                 "e_in", "e_gr", "e_ly", "e_br", "e_by", "e_dr", "e_kl", "e_ut", "e_ou",
                                 "e_plyft", "e_pbreak", "e_pbygg", "e_pdrop", "e_pklimax", "e_putand",
-                                "e_hard", "e_stok", "e_dub", "e_filter", "e_atmo" };
-constexpr int kAntalInst = 61;
+                                "e_hard", "e_stok", "e_dub", "e_filter", "e_atmo",
+                                "t_frys", "t_halvtid", "t_bak", "t_vinyl", "t_radio", "t_eko", "t_tomrum",
+                                "t_stam", "t_glapp", "t_byt", "t_spoke", "t_stopp", "trickmangd" };
+constexpr int kAntalInst = 74;
+constexpr int kITrick = 61, kITrickMangd = 73;
 constexpr int kIKurva = 31, kIEgen = 41;
 constexpr int kKurvTakter[] = { 128, 256, 512, 1024, 2048 };
 constexpr int kIPump = 28, kIPumpTid = 29, kIOvergang = 30;
@@ -94,6 +97,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout StallverketProcessor::skapaP
     knapp ("e_hard", "Egen hårdhet", kl.hard);     knapp ("e_stok", "Egen stök", kl.stok);
     knapp ("e_dub", "Egen dub", kl.dub);            knapp ("e_filter", "Egen filter", kl.filter);
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "e_atmo", 1 }, "Egen atmo först", false));
+
+    // TRICK: på/av per effekt + hur ofta
+    const char* trickId[] = { "t_frys", "t_halvtid", "t_bak", "t_vinyl", "t_radio", "t_eko", "t_tomrum",
+                              "t_stam", "t_glapp", "t_byt", "t_spoke", "t_stopp" };
+    const char* trickNamn[] = { "Frys", "Halvtid", "Baklänges-break", "Vinylbroms", "Radiobyte", "Kort eko", "Tomrum",
+                                "Stamning", "Bandglapp", "Kanalbyte", "Spökeko", "Stopp-slag" };
+    for (int i = 0; i < 12; ++i)
+        p.push_back (std::make_unique<AudioParameterBool> (ParameterID { trickId[i], 1 }, String::fromUTF8 (trickNamn[i]), true));
+    knapp ("trickmangd", "Hur ofta", 0.5f);
     // knappar som går att mappa till en controller (reagerar när de slås på)
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "breaknu", 1 }, "Break nu", false));
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "byggnu", 1 },  "Bygg nu", false));
@@ -118,6 +130,7 @@ StallverketProcessor::StallverketProcessor()
       state (*this, nullptr, "STALLVERKET", skapaParametrar())
 {
     minId = (uint32_t) juce::Random::getSystemRandom().nextInt (0x7fffffff) | 1u;
+    sattSkrift ("I16 G32 L8 B16 U8 D16 K32 A16 B8 U8 D16 G32 O16");
     lasInstallning (cache);
    #if STALLVERKET_TEST_UNLOCKED
     licens::upplast().store (true);   // bara testprogrammet, aldrig det som säljs
@@ -177,7 +190,19 @@ motor::Installning StallverketProcessor::fran (const float* v) const
     e.pLyft = q[0]; e.pBreak = q[1]; e.pByggDirekt = q[2]; e.pDropDirekt = q[3]; e.pKlimax = q[4]; e.pUtandning = q[5];
     e.hard = q[6]; e.stok = q[7]; e.dub = q[8]; e.filter = q[9]; e.atmoForst = q[10] > 0.5f;
 
+    in.trick = 0;
+    for (int i = 0; i < motor::kAntalTrick; ++i) if (v[kITrick + i] > 0.5f) in.trick |= 1u << i;
+    in.trickMangd = v[kITrickMangd];
+
+    // SKRIFTEN: CENTRAL läser sin egen text, kanalerna läser den CENTRAL skickat
+    auto& nav = ledning::nav();
+    const bool egen = arCentral() || ! centralLever();
+    in.skriftN = egen ? skriftAntal.load() : nav.skriftN.load();
+    in.skriftN = juce::jlimit (0, 32, in.skriftN);
+    for (int i = 0; i < in.skriftN; ++i) in.skrift[i] = egen ? skriftKod[i].load() : nav.skrift[i].load();
+
     uint32_t h = 0x5eed;
+    for (int i = 0; i < in.skriftN; ++i) h = motor::blanda (h, (uint32_t) in.skrift[i]);
     for (int i = kIKurva; i < kAntalInst; ++i) { uint32_t b; std::memcpy (&b, &v[i], 4); h = motor::blanda (h, b); }
     in.extra = h;
     return in;
@@ -281,6 +306,9 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
             float v[ledning::kInst] {};
             lasInstallning (v);
             for (int i = 0; i < kAntalInst; ++i) nav.inst[i].store (v[i]);
+            const int sn = skriftAntal.load();
+            for (int i = 0; i < sn; ++i) nav.skrift[i].store (skriftKod[i].load());
+            nav.skriftN.store (sn);
             nav.centralSenast.store (nu);
             annanCentral.store (false);
         }
@@ -356,7 +384,9 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         }
     }
 
-    const auto in = fran (v);
+    auto in = fran (v);
+    for (int i = 0; i < ledning::kKanaler; ++i)
+        if (ledning::levande (nav.kanal[i].senast.load(), nu) && ledning::levande (nav.kanal[i].ljud.load(), nu, 3000)) in.levande |= 1u << i;
     if (! harPlan || in != planFor) { plan = motor::byggPlan (in); planFor = in; harPlan = true; }
     const auto ov = overstyr();
 
@@ -570,6 +600,7 @@ bool StallverketProcessor::sparaPreset (const juce::String& namn)
     x.setAttribute ("version", 1);
     for (int i = 0; i < 11; ++i) x.setAttribute (kInstId[i], las (kInstId[i]));
     for (int i = kIOvergang; i < kAntalInst; ++i) x.setAttribute (kInstId[i], las (kInstId[i]));
+    x.setAttribute ("skrift", skriftText);
     const auto fil = mapp.getChildFile (juce::File::createLegalFileName (namn) + ".stallverket");
     aktivtPresetNamn = namn;
     return x.writeTo (fil);
@@ -583,8 +614,19 @@ bool StallverketProcessor::laddaPresetFil (const juce::File& f)
         if (x->hasAttribute (kInstId[i])) satt (kInstId[i], (float) x->getDoubleAttribute (kInstId[i]));
     for (int i = kIOvergang; i < kAntalInst; ++i)
         if (x->hasAttribute (kInstId[i])) satt (kInstId[i], (float) x->getDoubleAttribute (kInstId[i]));
+    if (x->hasAttribute ("skrift")) sattSkrift (x->getStringAttribute ("skrift"));
     aktivtPresetNamn = x->getStringAttribute ("namn", f.getFileNameWithoutExtension());
     return true;
+}
+
+//==============================================================================
+void StallverketProcessor::sattSkrift (const juce::String& txt)
+{
+    skriftText = txt;
+    int kod[32] {};
+    const int n = motor::lasSkrift (txt.toRawUTF8(), kod, 32);
+    for (int i = 0; i < n; ++i) skriftKod[i].store (kod[i]);
+    skriftAntal.store (n);
 }
 
 //==============================================================================
@@ -726,6 +768,7 @@ void StallverketProcessor::getStateInformation (juce::MemoryBlock& destData)
     for (int i = 0; i < kAntalInst; ++i) c.setProperty (kInstId[i], cache[i], nullptr);
     c.setProperty ("har", harCache, nullptr);
     s.setProperty ("preset", aktivtPresetNamn, nullptr);
+    s.setProperty ("skrift", skriftText, nullptr);
     if (auto xml = s.createXml()) copyXmlToBinary (*xml, destData);
 }
 
@@ -741,6 +784,8 @@ void StallverketProcessor::setStateInformation (const void* data, int sizeInByte
         s.removeChild (c, nullptr);
     }
     aktivtPresetNamn = s.getProperty ("preset", "").toString();
+    sattSkrift (s.getProperty ("skrift", skriftText).toString());
+    s.removeProperty ("skrift", nullptr);
     state.replaceState (s);
     tillstandLaddat = true;
 }

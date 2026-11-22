@@ -94,9 +94,10 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     sprakKnapp.onClick = [this] { sprak::sattEngelska (! sprak::engelska()); licensRuta.texter(); byggLayout(); };
 
     // ---- flikar
-    flikLat.setButtonText (utf8 ("LÅTEN")); flikKurva.setButtonText ("KURVA"); flikMall.setButtonText ("MALL");
+    flikLat.setButtonText (utf8 ("LÅTEN")); flikKurva.setButtonText ("KURVA"); flikMall.setButtonText ("MALL"); flikTrick.setButtonText ("TRICK");
+    flikTrick.setTooltip (utf8 ("Roliga effekter i breaks, övergångar och groove. Slå av och på, och välj hur ofta."));
     int fi = 0;
-    for (auto* b : { &flikLat, &flikKurva, &flikMall })
+    for (auto* b : { &flikLat, &flikKurva, &flikMall, &flikTrick })
     {
         b->setClickingTogglesState (true);
         b->setRadioGroupId (77);
@@ -157,6 +158,50 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     fyllMallar();
     licensRuta.onUpplast = [this] { repaint(); };
 
+    // ---- trick
+    const char* trickId[] = { "t_frys", "t_halvtid", "t_bak", "t_vinyl", "t_radio", "t_eko", "t_tomrum",
+                              "t_stam", "t_glapp", "t_byt", "t_spoke", "t_stopp" };
+    const char* trickText[] = { "FRYS", "HALVTID", "BAKLÄNGES", "VINYLBROMS", "RADIOBYTE", "KORT EKO", "TOMRUM",
+                                "STAMNING", "BANDGLAPP", "KANALBYTE", "SPÖKEKO", "STOPP-SLAG" };
+    const char* trickTips[] = {
+        "Sista biten innan breaket fryses och ringer vidare medan allt annat tystnar.",
+        "Breaket spelar i halv hastighet, tungt och segt.",
+        "Hela breaket spelas baklänges ur det som just spelats.",
+        "Sista takten innan droppet bromsar in som en skiva, sedan smäller droppet in.",
+        "Kanalerna hoppar mellan filtrerat och öppet, som när man vrider på en radio.",
+        "Sista slaget upprepas allt snabbare och högre in i droppet.",
+        "Allt tystnar utom en slumpvald kanal, ensam i rummet.",
+        "En 1/8-del hackar som en platta som hoppar.",
+        "Tonhöjden dippar ett slag, som ett band som slirar.",
+        "Vänster och höger byter plats en takt.",
+        "En kanal försvinner men dess eko hörs vidare.",
+        "Allt tystnar ett halvt slag mitt i takten." };
+    for (int i = 0; i < motor::kAntalTrick; ++i)
+    {
+        trickKnapp[i].setButtonText (utf8 (trickText[i]));
+        trickKnapp[i].setClickingTogglesState (true);
+        trickKnapp[i].setTooltip (utf8 (trickTips[i]));
+        trickAtt[i] = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.state, trickId[i], trickKnapp[i]);
+        addChildComponent (trickKnapp[i]);
+    }
+    trickMangd.setSliderStyle (juce::Slider::LinearBar);
+    trickMangd.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+    trickMangd.setColour (juce::Slider::textBoxTextColourId, juce::Colours::transparentBlack);
+    trickMangd.setColour (juce::Slider::trackColourId, ArmColours::sodiumDk);
+    trickMangdAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.state, "trickmangd", trickMangd);
+    trickMangd.onValueChange = [this] { repaint (tidYta); };
+    trickMangd.setTooltip (utf8 ("Hur ofta trick får hända. 0 = aldrig, 100 % = så ofta det går."));
+    addChildComponent (trickMangd);
+    skriftFalt.setText (proc.skrift(), false);
+    skriftFalt.setFont (juce::FontOptions (14.0f, juce::Font::bold));
+    skriftFalt.setColour (juce::TextEditor::backgroundColourId, ArmColours::raised);
+    skriftFalt.setColour (juce::TextEditor::textColourId, ArmColours::text);
+    skriftFalt.setColour (juce::TextEditor::outlineColourId, ArmColours::line2);
+    skriftFalt.setColour (juce::TextEditor::focusedOutlineColourId, ArmColours::sodium);
+    skriftFalt.onTextChange = [this] { proc.sattSkrift (skriftFalt.getText()); repaint (tidYta); };
+    skriftFalt.setTooltip (utf8 ("Mallen SKRIFTEN följer den här texten. I=INTRO G=GROOVE L=LYFT B=BREAK U=BYGG D=DROP K=KLIMAX A=UTANDNING O=OUTRO, siffra = takter."));
+    addChildComponent (skriftFalt);
+
     fro.attach (proc.state, "fro", utf8 ("FRÖ"));
     energi.attach (proc.state, "energi", "ENERGI");
     variation.attach (proc.state, "variation", "VARIATION");
@@ -200,7 +245,7 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
                                                              &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &overgang, &midiKnapp })
         addChildComponent (c);
     for (auto& k : kanalDjup) addChildComponent (k);
-    for (auto* c : std::initializer_list<juce::Component*> { &flikLat, &flikKurva, &flikMall, &exportKnapp, &kurvaPa, &kurvLangd,
+    for (auto* c : std::initializer_list<juce::Component*> { &flikLat, &flikKurva, &flikMall, &flikTrick, &exportKnapp, &kurvaPa, &kurvLangd,
                                                              &atmoForst, &kopieraMall, &sparaMall, &laddaMall })
         addChildComponent (c);
     for (auto& c : mallLangd) addChildComponent (c);
@@ -255,7 +300,7 @@ void StallverketEditor::byggLayout()
                                                              &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &overgang, &midiKnapp })
         c->setVisible (centralVy);
     for (auto* c : std::initializer_list<juce::Component*> { &centralKnapp, &kanalVal, &rollVal, &sprakKnapp }) c->setVisible (true);
-    for (auto* c : { &flikLat, &flikKurva, &flikMall, &exportKnapp }) c->setVisible (centralVy);
+    for (auto* c : { &flikLat, &flikKurva, &flikMall, &flikTrick, &exportKnapp }) c->setVisible (centralVy);
     visaVy (vy);
 
     // översätt texterna (rollnamn m.m.)
@@ -321,7 +366,30 @@ void StallverketEditor::resized()
     tidYta = r.removeFromTop (kTidH);
     {
         auto f = tidYta.reduced (8).removeFromTop (18);
-        for (auto* b : { &flikLat, &flikKurva, &flikMall }) { b->setBounds (f.removeFromLeft (64)); f.removeFromLeft (4); }
+        for (auto* b : { &flikLat, &flikKurva, &flikMall, &flikTrick }) { b->setBounds (f.removeFromLeft (64)); f.removeFromLeft (4); }
+
+        // trick: tre spalter med knappar, hur ofta, och skriften längst ner
+        auto tv = tidYta.reduced (12).withTrimmedTop (30);
+        auto skr = tv.removeFromBottom (54);
+        skriftYta = skr.removeFromTop (16);
+        skriftFalt.setBounds (skr.removeFromTop (30));
+        tv.removeFromBottom (8);
+        auto ofta = tv.removeFromRight (190);
+        trickRub[3] = ofta.removeFromTop (16);
+        trickMangd.setBounds (ofta.removeFromTop (30).reduced (0, 4));
+        tv.removeFromRight (16);
+        const int sp = (tv.getWidth() - 24) / 3;
+        auto c1 = tv.removeFromLeft (sp); tv.removeFromLeft (12);
+        auto c2 = tv.removeFromLeft (sp); tv.removeFromLeft (12);
+        auto c3 = tv;
+        trickRub[0] = c1.removeFromTop (16); trickRub[1] = c2.removeFromTop (16); trickRub[2] = c3.removeFromTop (16);
+        const int bh = 30;
+        // BREAK: frys, halvtid, baklänges, tomrum, radio
+        for (int i : { 0, 1, 2, 6, 4 }) { trickKnapp[i].setBounds (c1.removeFromTop (bh).reduced (0, 3)); }
+        // ÖVERGÅNG: vinyl, eko
+        for (int i : { 3, 5 }) { trickKnapp[i].setBounds (c2.removeFromTop (bh).reduced (0, 3)); }
+        // GROOVE
+        for (int i : { 7, 8, 9, 10, 11 }) { trickKnapp[i].setBounds (c3.removeFromTop (bh).reduced (0, 3)); }
 
         // kurva
         auto kv = tidYta.reduced (8).withTrimmedTop (26);
@@ -415,7 +483,8 @@ void StallverketEditor::paint (juce::Graphics& g)
     {
         if (vy == 0) ritaTidslinje (g, tidYta);
         else if (vy == 1) ritaKurva (g, tidYta);
-        else { drawPanel (g, tidYta, "", {}); ritaMallRubriker (g); }
+        else if (vy == 2) { drawPanel (g, tidYta, "", {}); ritaMallRubriker (g); }
+        else { drawPanel (g, tidYta, "", {}); ritaTrick (g); }
         auto b = getLocalBounds().reduced (10, 8);
         b.removeFromTop (30 + 8 + kTidH + 8);
         auto knappYta = b.removeFromRight (190);
@@ -657,7 +726,10 @@ void StallverketEditor::visaVy (int v)
     for (auto& m : mallLangd) m.setVisible (c && vy == 2);
     for (auto& m : mallRatt) m.setVisible (c && vy == 2);
     for (auto* b : std::initializer_list<juce::Component*> { &atmoForst, &kopieraMall, &sparaMall, &laddaMall }) b->setVisible (c && vy == 2);
-    (vy == 0 ? flikLat : vy == 1 ? flikKurva : flikMall).setToggleState (true, juce::dontSendNotification);
+    for (auto& b : trickKnapp) b.setVisible (c && vy == 3);
+    trickMangd.setVisible (c && vy == 3);
+    skriftFalt.setVisible (c && vy == 3);
+    (vy == 0 ? flikLat : vy == 1 ? flikKurva : vy == 2 ? flikMall : flikTrick).setToggleState (true, juce::dontSendNotification);
     repaint();
 }
 
@@ -717,6 +789,30 @@ void StallverketEditor::ritaMallRubriker (juce::Graphics& g)
         g.setColour (sodium);
         g.drawText (sprak::trU ("VÄLJ EGEN I MALLMENYN FÖR ATT HÖRA DIN MALL"), tidYta.reduced (12).removeFromTop (18).withTrimmedLeft (220), juce::Justification::centredRight);
     }
+}
+
+void StallverketEditor::ritaTrick (juce::Graphics& g)
+{
+    using namespace ArmColours;
+    const juce::String rub[] = { sprak::trU ("I BREAKET"), sprak::trU ("IN I DROPPET"), sprak::trU ("I GROOVET"), sprak::trU ("HUR OFTA") };
+    g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
+    for (int i = 0; i < 4; ++i) { g.setColour (sodium); g.drawText (rub[i], trickRub[i], juce::Justification::centredLeft); }
+    g.setColour (sodium);
+    g.drawText (juce::String (juce::roundToInt (trickMangd.getValue() * 100.0)) + " %", trickRub[3], juce::Justification::centredRight);
+    g.setColour (muted);
+    g.setFont (juce::FontOptions (9.5f));
+    auto info = trickRub[3].translated (0, 52).withHeight (60);
+    g.drawFittedText (sprak::trU ("Ett trick per break och per uppbyggnad, och ibland ett i groovet. Tänd = får hända."), info, juce::Justification::topLeft, 4);
+
+    g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
+    g.setColour (sodium);
+    g.drawText (sprak::trU ("SKRIFTEN"), skriftYta, juce::Justification::centredLeft);
+    g.setColour (muted);
+    g.setFont (juce::FontOptions (9.5f));
+    juce::String hjalp = sprak::trU ("I INTRO · G GROOVE · L LYFT · B BREAK · U BYGG · D DROP · K KLIMAX · A UTANDNING · O OUTRO · siffra = takter");
+    const auto in = proc.installning();
+    if (in.mall != 14) hjalp = sprak::trU ("VÄLJ SKRIFTEN I MALLMENYN") + "   ·   " + hjalp;
+    g.drawText (hjalp, skriftYta.withTrimmedLeft (80), juce::Justification::centredRight);
 }
 
 void StallverketEditor::ritaKurva (juce::Graphics& g, juce::Rectangle<int> yta)

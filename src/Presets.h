@@ -18,6 +18,7 @@ struct Fabrik
 };
 
 // mall: 0 KLASSISK 1 MINIMAL 2 PEAK 3 HYPNOS 4 DOCKLANDS 5 STÖK 6 DUB 7 BERG-O-DAL
+//       8 SPEGEL 9 STAPLA 10 FALSKT DROP 11 DUELL 12 TELEFON 13 SVÄRM 14 SKRIFTEN
 // form: 0 EVIG 1 64 2 128 3 192 4 256
 inline constexpr Fabrik kFabrik[] =
 {
@@ -62,6 +63,13 @@ inline constexpr Fabrik kFabrik[] =
     { "Ständig förändring",         0, 0, 0.60f,1.00f,0.60f,0.50f,0.50f,0.70f,0.50f,0.30f, 81 },
     { "Stilla vatten",              6, 0, 0.30f,0.30f,0.50f,0.80f,0.05f,0.90f,0.20f,0.60f, 10 },
     { "Ställverket brinner",        5, 0, 1.00f,0.90f,0.50f,0.30f,1.00f,0.50f,0.90f,0.30f,666 },
+    { "Spegelsalen",                8, 0, 0.60f,0.40f,0.60f,0.50f,0.30f,0.70f,0.40f,0.20f, 18 },
+    { "Stapla lådor",               9, 0, 0.70f,0.20f,0.80f,0.40f,0.30f,0.40f,0.60f,0.10f, 24 },
+    { "Lurad igen",                10, 0, 0.75f,0.50f,0.70f,0.50f,0.50f,0.60f,1.00f,0.20f, 32 },
+    { "Duell i kulverten",         11, 0, 0.65f,0.40f,0.50f,0.50f,0.40f,0.50f,0.40f,0.40f, 43 },
+    { "Ring mig",                  12, 0, 0.55f,0.40f,0.60f,0.60f,0.30f,0.70f,0.50f,0.40f, 46 },
+    { "Bisvärmen",                 13, 0, 0.75f,0.80f,0.50f,0.30f,0.70f,0.50f,0.50f,0.20f, 53 },
+    { "Enligt skriften",           14, 0, 0.60f,0.50f,0.60f,0.50f,0.40f,0.60f,0.50f,0.20f, 70 },
 };
 inline constexpr int kAntal = (int) (sizeof (kFabrik) / sizeof (kFabrik[0]));
 } // namespace presets
