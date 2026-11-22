@@ -4,9 +4,9 @@
 
 ## Ladda ner
 
-- Mac: https://github.com/phunkshunz/R744-VSTi/releases/latest/download/STALLVERKET-macOS.zip
-- Windows: https://github.com/phunkshunz/R744-VSTi/releases/latest/download/STALLVERKET-Windows.zip
-- Linux: https://github.com/phunkshunz/R744-VSTi/releases/latest/download/STALLVERKET-Linux.zip
+- Mac: https://github.com/phunkshunz/Stallverket-VSTi/releases/latest/download/STALLVERKET-macOS.zip
+- Windows: https://github.com/phunkshunz/Stallverket-VSTi/releases/latest/download/STALLVERKET-Windows.zip
+- Linux: https://github.com/phunkshunz/Stallverket-VSTi/releases/latest/download/STALLVERKET-Linux.zip
 
 Mac: packa upp och kör `bash installera.command` i Terminal. Windows: dubbelklicka `installera.bat`.
 
