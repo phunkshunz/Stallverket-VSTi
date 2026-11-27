@@ -14,7 +14,9 @@
 //    grind, stutter, baklänges och dubkast, beroende på kanalens ROLL
 //    (KICK, BAS, HATS ...) och var i låten vi är.
 
+#include <algorithm>
 #include <array>
+#include <initializer_list>
 #include <cmath>
 #include <cstdint>
 
@@ -104,6 +106,8 @@ struct Installning
     float    andas     = 0.4f;
     float    dub       = 0.2f;
     float    overgang  = 0.5f;  // övergångseffekter: tape stop, pitch-stutter, rum
+    float    mjuk      = 0.0f;  // MJUKHET: 0 = gamla tvära byten, 1 = långa, glidande övergångar (se mjukgor nedan)
+    float    tryck     = 0.0f;  // TRYCK: hur hårt maskinen trycker (mättnad och punch), motorn höjer i droppet
 
     // EGEN mall (mall == kAntalMallar) från mallredigeraren
     Mall     egen = kMallar[0];
@@ -128,7 +132,8 @@ struct Installning
     {
         return mall == o.mall && fro == o.fro && form == o.form && energi == o.energi && variation == o.variation
             && brytDjup == o.brytDjup && byggLangd == o.byggLangd && stok == o.stok && filter == o.filter
-            && andas == o.andas && dub == o.dub && overgang == o.overgang && extra == o.extra;
+            && andas == o.andas && dub == o.dub && overgang == o.overgang && mjuk == o.mjuk && tryck == o.tryck
+            && extra == o.extra;
     }
     bool operator!= (const Installning& o) const { return ! (*this == o); }
 };
@@ -259,6 +264,8 @@ inline Plan byggPlan (const Installning& in)
         const float v = nasta();
         if (v < in.variation * 0.25f)      l *= 0.5f;
         else if (v > 1.0f - in.variation * 0.25f) l *= 2.0f;
+        // MJUKHET: uppbyggnader och breaks får aldrig bli så korta att de låter som ett misstag
+        if (in.mjuk > 0.5f && ! p.form && (typ == BYGG || typ == BREAK || typ == LYFT)) return tvapotens (l, 8, 64);
         return tvapotens (l, 4, 64);
     };
 
@@ -460,6 +467,7 @@ struct Atgard
     int      fas     = 0;       // FASFÖRSKJUTNING: kanalen ligger så här många 1/16-delar efter
     float    dubFb   = 0.0f;    // DUBKEDJA: ekots återkoppling (0 = vanlig)
     bool     ekoKlipp = false;  // klipper ekot tvärt (droppet efter en dubkedja)
+    float    tryck   = 0.0f;    // TRYCK: mättnad och täthet, 0..1 (motorn höjer i droppet, sänker i breaket)
 };
 
 inline uint16_t grindMonster (uint32_t h, float tathet)
@@ -482,11 +490,20 @@ inline int intrADning (int roll, bool atmoForst)
     return (atmoForst ? b : a)[roll];
 }
 
-// Åtgärden för en kanal vid en viss tidpunkt.
+// Grupper för MJUKHET: bara en grupp får byta i varje 8-taktsfras, så att det
+// aldrig händer fyra saker samtidigt. Kick/bas, hats/ride, clap/perc, resten.
+inline int rollGrupp (int roll)
+{
+    static const int g[] = { 0, 0, 1, 2, 3, 3, 3, 3, 2, 1, 3 };   // KICK BAS HATS PERC SYNT ATMO FX LOOP CLAP RIDE VOX
+    return (roll >= 0 && roll < NUM_ROLL) ? g[roll] : 3;
+}
+inline bool melodisk (int roll) { return roll == SYNT || roll == ATMO || roll == BAS || roll == LOOP || roll == VOX || roll == FX; }
+
+// Åtgärden för en kanal vid en viss tidpunkt, rå (utan MJUKHET).
 //  slag    : position i slag (fjärdedelar) från låtens början
 //  slagPerTakt : taktartens täljare, oftast 4
-inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
-                      int kanal, int roll, double slag, int slagPerTakt = 4)
+inline Atgard atgardRa (const Plan& p, const Installning& in, const Overstyr& o,
+                        int kanal, int roll, double slag, int slagPerTakt = 4)
 {
     Atgard a;
     if (roll < 0 || roll >= NUM_ROLL) return a;
@@ -541,7 +558,14 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
             float pa = bas[roll] + (energiVid (in, takt) - 0.5f) * 0.4f;
             pa = 1.0f - in.variation * (1.0f - pa);
             if (s.typ == LYFT) pa = std::fmax (pa, 0.85f);
-            const uint32_t hf = blanda (hk, (uint32_t) fras, 77);
+            // MJUKHET: rollerna byter i turordning, en grupp per 8-taktsfras, i stället för alla på en gång
+            int block = fras;
+            if (in.mjuk > 0.3f)
+            {
+                const int K = in.variation > 0.75f ? 2 : 4;
+                block = (fras + rollGrupp (roll) % K) / K;
+            }
+            const uint32_t hf = blanda (hk, (uint32_t) block, 77);
             const float x = slump01 (hf);
             if (x > pa)
             {
@@ -710,7 +734,18 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
                 const bool aTur = ((tid / 2) % 2) == 0;
                 const bool grA = roll == SYNT || roll == VOX || roll == FX || roll == ATMO;
                 const bool grB = roll == PERC || roll == LOOP || roll == CLAP;
-                if ((grA && ! aTur) || (grB && aTur)) a.niva = 0.0f;
+                auto paFor = [&] (bool tur) { return (grA && ! tur) || (grB && tur) ? 0.0f : 1.0f; };
+                float v = paFor (aTur);
+                if (in.mjuk > 0.001f)
+                {
+                    // MJUKHET: svaret tonar in under sista slaget (eller två) i stället för att klippas in
+                    const double block = 2.0 * slagPerTakt, posB = std::fmod (posIDel, block);
+                    const double tona = std::min (block * 0.5, 0.5 + 1.5 * in.mjuk);
+                    const float w = (float) std::clamp ((posB - (block - tona)) / tona, 0.0, 1.0);
+                    v += (paFor (! aTur) - v) * w * w * (3.0f - 2.0f * w);
+                    if (v < 1.0f && melodisk (roll)) a.lp = std::fmin (a.lp, 0.35f + 0.65f * v);
+                }
+                a.niva *= v;
                 if (roll == HATS && aTur) a.niva *= 0.5f;
             }
             break;
@@ -724,8 +759,25 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
             if (s.typ == GROOVE || s.typ == LYFT || s.typ == KLIMAX || s.typ == UTANDNING)
             {
                 const float pa = roll == KICK ? 0.92f : 0.5f + 0.3f * energiVid (in, takt);
-                a.niva = slump01 (blanda (hk, (uint32_t) tid, 0x5A)) < pa ? 1.0f : 0.0f;
-                a.hard = true;
+                if (in.mjuk <= 0.001f)
+                {
+                    a.niva = slump01 (blanda (hk, (uint32_t) tid, 0x5A)) < pa ? 1.0f : 0.0f;
+                    a.hard = true;
+                }
+                else
+                {
+                    // MJUKHET: svärmen byter varannan takt (mjukt läge) och tonar mellan lägena
+                    const int steg = in.mjuk > 0.5f ? 2 : 1;
+                    const int64_t b = tid / steg;
+                    auto paFor = [&] (int64_t bb) { return slump01 (blanda (hk, (uint32_t) bb, 0x5A)) < pa ? 1.0f : 0.0f; };
+                    const double block = (double) steg * slagPerTakt, posB = std::fmod (posIDel, block);
+                    const double tona = std::min (block * 0.5, 0.5 + 1.5 * in.mjuk);
+                    const float w = (float) std::clamp ((posB - (block - tona)) / tona, 0.0, 1.0);
+                    const float v0 = paFor (b);
+                    const float v = (roll == KICK) ? v0 : v0 + (paFor (b + 1) - v0) * w * w * (3.0f - 2.0f * w);
+                    a.niva = v;
+                    if (melodisk (roll)) a.lp = std::fmin (a.lp, 0.35f + 0.65f * v);
+                }
             }
             break;
 
@@ -847,7 +899,8 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
             else if (ef == T_SPOKE)
             {
                 static const int vemLista[] = { SYNT, PERC, LOOP, VOX, CLAP, ATMO };
-                if (roll == vemLista[blanda (hb + 5) % 6]) { a.niva = 0.0f; a.dub = 1.0f; }
+                // bara takens två sista slag: hela takten utan kanalen lät som ett fel
+                if (roll == vemLista[blanda (hb + 5) % 6] && iTakt >= sptD - 2.0) { a.niva = 0.0f; a.dub = 1.0f; }
             }
             else if (ef == T_STOPP)
             {
@@ -908,6 +961,104 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
     if (s.typ == BREAK && slagKvar <= 1.0 && (roll == SYNT || roll == ATMO) && slump01 (s.h + 21) < dub)
         a.dub = 1.0f;
 
+    // ---- TRYCK: hårdast i droppet och klimax, växer genom bygget, lättare i breaket
+    {
+        float d = 0.8f;
+        if (s.typ == DROP || s.typ == KLIMAX) d = 1.0f;
+        else if (s.typ == BYGG) d = 0.55f + 0.45f * t;
+        else if (s.typ == BREAK) d = 0.45f;
+        else if (s.typ == INTRO || s.typ == OUTRO) d = 0.65f;
+        a.tryck = in.tryck * d;
+    }
+
+    return a;
+}
+
+//==============================================================================
+// MJUKHET: glider in i nästa fras i stället för att byta tvärt.
+//
+// Motorn tittar fram till nästa 8-taktsgräns (eller delens slut). Är kanalen på
+// väg ut eller in där, eller ska filtret någon annanstans, börjar förändringen
+// redan några slag (upp till två takter) innan, på det sätt en DJ eller producent
+// hade gjort det:
+//  - kick och bas på väg ut: högpass som lyfter ur basen, sedan ut på ettan
+//  - synt, atmo, loop på väg ut: lågpass som stänger och tonar ner
+//  - trummor på väg ut: tonar ner med lite stängt filter
+//  - på väg in: en filtrerad försmak som växer, och fullt på ettan (kicken kommer
+//    rakt in på ettan, det är så det ska låta)
+// In i DROP och KLIMAX glider ingenting: där ska det smälla.
+inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
+                      int kanal, int roll, double slag, int slagPerTakt = 4)
+{
+    Atgard a = atgardRa (p, in, o, kanal, roll, slag, slagPerTakt);
+    if (in.mjuk <= 0.001f || roll < 0 || roll >= NUM_ROLL) return a;
+    if (slagPerTakt < 1) slagPerTakt = 4;
+    if (slag < 0) slag = 0;
+
+    const Mall& m = mallFor (in);
+    const int64_t takt = (int64_t) std::floor (slag / slagPerTakt);
+    int64_t tid = 0;
+    const Sektion s = aktuell (p, o, takt, tid);
+    if (s.typ == BYGG || s.typ == INTRO || s.typ == OUTRO) return a;   // de glider redan på egen hand
+
+    const int64_t frasSlutITid = std::min ((int64_t) s.langd, (tid / 8 + 1) * 8);
+    const int64_t grans = takt + (frasSlutITid - tid);
+    const bool delByte = frasSlutITid == (int64_t) s.langd;
+    const double slagTill = (double) grans * slagPerTakt - slag;
+
+    int64_t ti = 0;
+    const Sektion n = aktuell (p, o, grans, ti);
+    if (delByte && (n.typ == DROP || n.typ == KLIMAX)) return a;
+
+    double W = delByte ? (n.typ == BREAK || n.typ == OUTRO ? 4.0 + 12.0 * in.mjuk : 2.0 + 6.0 * in.mjuk)
+                       : 1.0 + 7.0 * in.mjuk;
+    W *= 1.0 - 0.45 * m.hard;                                    // hårda mallar glider kortare
+    if (! melodisk (roll)) W *= 0.6;                              // trummor kortare än synt och atmo
+    W = std::min (W, (double) frasSlutITid * slagPerTakt * 0.5);  // aldrig mer än halva frasen
+    if (W < 0.25 || slagTill > W) return a;
+
+    const Atgard mal = atgardRa (p, in, o, kanal, roll, (double) grans * slagPerTakt + 0.02, slagPerTakt);
+    const float x  = (float) (1.0 - slagTill / W);               // 0 -> 1 fram till gränsen
+    const float sx = x * x * (3.0f - 2.0f * x);
+    auto lerp = [] (float a0, float b0, float t0) { return a0 + (b0 - a0) * t0; };
+
+    if (mal.niva < a.niva - 0.05f)                                // på väg ut
+    {
+        if (roll == KICK || roll == BAS)
+            a.hp = std::fmax (a.hp, lerp (a.hp, std::fmax (mal.hp, 0.38f), sx));
+        else if (melodisk (roll))
+        {
+            a.lp = std::fmin (a.lp, lerp (a.lp, std::fmin (mal.lp, 0.28f), sx));
+            a.niva = lerp (a.niva, mal.niva, sx * sx);
+        }
+        else
+        {
+            a.niva = lerp (a.niva, mal.niva, sx);
+            a.lp = std::fmin (a.lp, lerp (1.0f, 0.55f, sx));
+        }
+        a.hard = false;
+    }
+    else if (mal.niva > a.niva + 0.05f)                           // på väg in
+    {
+        if (roll != KICK)
+        {
+            const bool mel = melodisk (roll);
+            const float forsmak = mal.niva * (mel ? 0.45f : 0.35f) * (mel ? sx : sx * sx);
+            if (forsmak > a.niva)
+            {
+                a.niva = forsmak;
+                a.lp = lerp (mel ? 0.22f : 0.25f, mal.lp * (mel ? 0.7f : 0.7f), sx);
+                a.hp = mel ? a.hp : std::fmax (mal.hp, 0.25f * (1.0f - sx));
+                a.grind = mal.grind;
+                a.hard = false;
+            }
+        }
+    }
+    else                                                          // samma nivå: filtret glider dit det ska
+    {
+        if (std::abs (mal.lp - a.lp) > 0.02f) a.lp = lerp (a.lp, mal.lp, sx);
+        if (std::abs (mal.hp - a.hp) > 0.02f) a.hp = lerp (a.hp, mal.hp, sx);
+    }
     return a;
 }
 

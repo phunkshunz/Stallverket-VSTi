@@ -225,6 +225,10 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     pump.attach (proc.state, "pump", "PUMP");
     pumptid.attach (proc.state, "pumptid", "PUMPTID");
     overgang.attach (proc.state, "overgang", utf8 ("ÖVERGÅNG"));
+    mjuk.attach (proc.state, "mjuk", "MJUKHET");
+    tryck.attach (proc.state, "tryck", "TRYCK");
+    mjuk.slider.setTooltip (utf8 ("Hur mjukt motorn byter. Högt: element glider in och ut med filter under upp till två takter, en sak ändras i taget och uppbyggnader blir aldrig för korta. 0 = tvära byten som förr."));
+    tryck.slider.setTooltip (utf8 ("Mättnad som gör varje kanal tätare och hårdare utan att den blir högre. Motorn trycker mest i droppet och minst i breaket."));
     overgang.slider.setTooltip (utf8 ("Övergångseffekter: tape stop innan breaken, stutter som stiger i tonhöjd och rum som sväller in i droppet."));
     pump.slider.setTooltip (utf8 ("Kicken pumpar de andra kanalerna, utan routing. Följer motorn: ingen kick, ingen pump."));
     pumptid.slider.setTooltip (utf8 ("Hur länge pumpen håller i sig efter varje slag."));
@@ -252,7 +256,7 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     for (auto* c : std::initializer_list<juce::Component*> { &centralKnapp, &kanalVal, &rollVal, &mallVal, &formVal, &presetVal,
                                                              &presetFore, &presetNasta, &sparaKnapp, &slumpaFro, &slumpaAllt,
                                                              &breakNu, &byggNu, &dropNu, &hallKnapp, &slappKnapp, &recKnapp, &sprakKnapp,
-                                                             &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &overgang, &midiKnapp })
+                                                             &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &overgang, &mjuk, &tryck, &midiKnapp })
         addChildComponent (c);
     for (auto& k : kanalDjup) addChildComponent (k);
     for (auto* c : std::initializer_list<juce::Component*> { &flikLat, &flikKurva, &flikMall, &flikTrick, &exportKnapp, &kurvaPa, &kurvLangd,
@@ -307,7 +311,7 @@ void StallverketEditor::byggLayout()
 
     for (auto* c : std::initializer_list<juce::Component*> { &mallVal, &formVal, &presetVal, &presetFore, &presetNasta, &sparaKnapp,
                                                              &slumpaFro, &slumpaAllt, &breakNu, &byggNu, &dropNu, &hallKnapp, &slappKnapp, &recKnapp,
-                                                             &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &overgang, &midiKnapp })
+                                                             &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &overgang, &mjuk, &tryck, &midiKnapp })
         c->setVisible (centralVy);
     for (auto* c : std::initializer_list<juce::Component*> { &centralKnapp, &kanalVal, &rollVal, &sprakKnapp }) c->setVisible (true);
     for (auto* c : { &flikLat, &flikKurva, &flikMall, &flikTrick, &exportKnapp }) c->setVisible (centralVy);
@@ -461,11 +465,12 @@ void StallverketEditor::resized()
     exportKnapp.setBounds (valRad.removeFromLeft (110));
 
     botten.removeFromTop (8);
-    Knob* rattar[] = { &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &overgang, &pump, &pumptid, &djup };
-    const int kb = botten.getWidth() / 7;
+    Knob* rattar[] = { &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &mjuk,
+                       &andas, &dub, &overgang, &pump, &pumptid, &tryck, &djup };
+    const int kb = botten.getWidth() / 8;
     auto rad1 = botten.removeFromTop (botten.getHeight() / 2);
-    for (int i = 0; i < 7; ++i) rattar[i]->setBounds (rad1.removeFromLeft (kb).reduced (2, 0));
-    for (int i = 7; i < 13; ++i) rattar[i]->setBounds (botten.removeFromLeft (kb).reduced (2, 0));
+    for (int i = 0; i < 8; ++i) rattar[i]->setBounds (rad1.removeFromLeft (kb).reduced (2, 0));
+    for (int i = 8; i < 15; ++i) rattar[i]->setBounds (botten.removeFromLeft (kb).reduced (2, 0));
 
     knappar.removeFromLeft (10);
     const int bh = (knappar.getHeight() - 5 * 6) / 6;

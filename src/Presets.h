@@ -15,6 +15,7 @@ struct Fabrik
     int mall, form;
     float energi, variation, brytDjup, byggLangd, stok, filter, andas, dub;
     int fro;
+    float mjuk = 0.65f, tryck = 0.3f;   // MJUKHET och TRYCK (äldre presets får standardvärdena)
 };
 
 // mall: 0 KLASSISK 1 MINIMAL 2 PEAK 3 HYPNOS 4 DOCKLANDS 5 STÖK 6 DUB 7 BERG-O-DAL

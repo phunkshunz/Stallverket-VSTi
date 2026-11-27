@@ -17,8 +17,10 @@ const char* const kInstId[] = { "mall", "fro", "form", "energi", "variation", "b
                                 "e_hard", "e_stok", "e_dub", "e_filter", "e_atmo",
                                 "t_frys", "t_halvtid", "t_bak", "t_vinyl", "t_radio", "t_eko", "t_tomrum",
                                 "t_stam", "t_glapp", "t_byt", "t_spoke", "t_stopp", "trickmangd",
-                                "t_fas", "t_dubkedja", "t_bage", "t_bassvep", "t_kickpaus" };
-constexpr int kAntalInst = 79;
+                                "t_fas", "t_dubkedja", "t_bage", "t_bassvep", "t_kickpaus",
+                                "mjuk", "tryck" };
+constexpr int kAntalInst = 81;
+constexpr int kIMjuk = 79, kITryck = 80;
 constexpr int kITrick = 61, kITrickMangd = 73, kITrick2 = 74;
 constexpr int kIKurva = 31, kIEgen = 41;
 constexpr int kKurvTakter[] = { 128, 256, 512, 1024, 2048 };
@@ -74,6 +76,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout StallverketProcessor::skapaP
     knapp ("pump",      "Pump",      0.35f);
     knapp ("pumptid",   "Pumptid",   0.4f);
     knapp ("overgang",  "Övergång",  0.5f);
+    knapp ("mjuk",      "Mjukhet",   0.65f);
+    knapp ("tryck",     "Tryck",     0.3f);
 
     // energikurva
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "kurva", 1 }, "Kurva", false));
@@ -109,8 +113,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout StallverketProcessor::skapaP
     knapp ("trickmangd", "Hur ofta", 0.35f);
     const char* trick2Id[] = { "t_fas", "t_dubkedja", "t_bage", "t_bassvep", "t_kickpaus" };
     const char* trick2Namn[] = { "Fasförskjutning", "Dubkedja", "Filterbåge", "Bassvep", "Kickpaus" };
-    for (int i = 0; i < 5; ++i)
-        p.push_back (std::make_unique<AudioParameterBool> (ParameterID { trick2Id[i], 1 }, String::fromUTF8 (trick2Namn[i]), true));
+    for (int i = 0; i < 5; ++i)   // FASFÖRSKJUTNING av från början: den kan låta som en flam
+        p.push_back (std::make_unique<AudioParameterBool> (ParameterID { trick2Id[i], 1 }, String::fromUTF8 (trick2Namn[i]), i != 0));
     // knappar som går att mappa till en controller (reagerar när de slås på)
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "breaknu", 1 }, "Break nu", false));
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "byggnu", 1 },  "Bygg nu", false));
@@ -186,6 +190,7 @@ motor::Installning StallverketProcessor::fran (const float* v) const
     in.form      = juce::jlimit (0, motor::kAntalFormer - 1, (int) std::lround (v[2]));
     in.energi    = v[3]; in.variation = v[4]; in.brytDjup = v[5]; in.byggLangd = v[6];
     in.stok      = v[7]; in.filter = v[8]; in.andas = v[9]; in.dub = v[10]; in.overgang = v[kIOvergang];
+    in.mjuk      = v[kIMjuk]; in.tryck = v[kITryck];
 
     in.kurvaPa = v[kIKurva] > 0.5f;
     in.kurvTakter = kKurvTakter[juce::jlimit (0, 4, (int) std::lround (v[kIKurva + 1]))];
@@ -488,6 +493,8 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     const float pumpTid = 0.12f + v[kIPumpTid] * 0.7f;
     const float kickDjup = kickKanal >= 0 ? juce::jlimit (0.0f, 1.0f, v[11] * v[12 + kickKanal]) : 0.0f;
 
+    fack.sattRoll (r);
+
     // ljudet som hörs är 30 ms gammalt (framåtblicken), så motorn räknar på ljudets tid
     const double ljudTid = ppq - fack.latens() * slagPerSampel;
     fack.kor (L, R, n, ljudTid, slagPerSampel, styr, djup, 1.0f,
@@ -619,6 +626,7 @@ void StallverketProcessor::laddaFabrik (int i)
     satt ("energi", f.energi); satt ("variation", f.variation); satt ("brytdjup", f.brytDjup);
     satt ("bygglangd", f.byggLangd); satt ("stok", f.stok); satt ("filter", f.filter);
     satt ("andas", f.andas); satt ("dub", f.dub);
+    satt ("mjuk", f.mjuk); satt ("tryck", f.tryck);
     currentPreset = i;
     aktivtPresetNamn = juce::String::fromUTF8 (f.namn);
 }

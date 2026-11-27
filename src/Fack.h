@@ -117,6 +117,8 @@ public:
         raknare = 0;
         rum.forbered (sr);
         tapeAktiv = false; rumN = 0;
+        tryckN = 0.0f; rmsIn = rmsUt = 0.0f; kompN = 1.0f;
+        rmsK = 1.0f - std::exp (-1.0f / (0.3f * sr));   // 300 ms
         halvAktiv = bakLangAktiv = frysAktiv = false; frysN = 0; bytN = 0; glappN = 0;
     }
 
@@ -349,6 +351,25 @@ public:
             hp.kor (xR, 1, hpR);
             xL = hpL; xR = hpR;
 
+            // ---- TRYCK: mättnad som gör kanalen tätare och hårdare, men inte högre.
+            // Nivån räknas tillbaka med en långsam RMS-jämförelse, så det låter fetare utan att lura örat med volym.
+            {
+                const float malT = spelar ? a.tryck * d * tryckRoll : 0.0f;
+                tryckN += 0.0005f * (malT - tryckN);
+                if (tryckN > 0.002f)
+                {
+                    const float g = 1.0f + 6.0f * tryckN;
+                    const float sL = std::tanh (g * xL), sR = std::tanh (g * xR);
+                    rmsIn  += rmsK * (xL * xL + xR * xR - rmsIn);
+                    rmsUt  += rmsK * (sL * sL + sR * sR - rmsUt);
+                    const float komp = std::clamp (std::sqrt ((rmsIn + 1e-9f) / (rmsUt + 1e-9f)), 0.1f, 2.0f);
+                    kompN += 0.0005f * (komp - kompN);
+                    const float w = std::min (1.0f, tryckN * 1.5f);
+                    xL += (sL * kompN - xL) * w;
+                    xR += (sR * kompN - xR) * w;
+                }
+            }
+
             // ---- dubkast: skickas före nivån, så ekot ringer vidare när kanalen tystnar
             const int ekoTid = std::clamp ((int) (sampelPerSlag * 0.75), 64, ekoLen - 1);
             int ekoLas = ekoSkriv - ekoTid; if (ekoLas < 0) ekoLas += ekoLen;
@@ -412,7 +433,7 @@ public:
             float oR = xR * gain * pumpN + eR * ekoKlippG + rR + fR;
 
             // ---- KANALBYTE: vänster och höger byter plats, mjukt
-            bytN += 0.001f * ((a.byt && d > 0.5f ? 1.0f : 0.0f) - bytN);
+            bytN += 0.00025f * ((a.byt && d > 0.5f ? 1.0f : 0.0f) - bytN);
             if (bytN > 0.0005f)
             {
                 const float b = bytN, l0 = oL, r0 = oR;
@@ -438,6 +459,13 @@ public:
         const float fr = (float) (p - i0);
         l = ring[(size_t) i0 * 2] + (ring[(size_t) i1 * 2] - ring[(size_t) i0 * 2]) * fr;
         r = ring[(size_t) i0 * 2 + 1] + (ring[(size_t) i1 * 2 + 1] - ring[(size_t) i0 * 2 + 1]) * fr;
+    }
+
+    // hur mycket TRYCK rollen tål: kick och bas mest, hats och atmo minst (de blir lätt fräsiga)
+    void sattRoll (int roll)
+    {
+        static const float t[] = { 1.0f, 0.8f, 0.3f, 0.6f, 0.5f, 0.2f, 0.4f, 0.7f, 0.7f, 0.3f, 0.3f };
+        tryckRoll = (roll >= 0 && roll < motor::NUM_ROLL) ? t[roll] : 0.0f;
     }
 
     int latens() const { return framLen; }      // rapporteras till DAW:en, som skjuter allt annat lika mycket
@@ -472,5 +500,6 @@ private:
     int ankare = 0, bakAnkare = 0, bakN = 0;
     unsigned raknare = 0;
     float topp = 0;
+    float tryckRoll = 0.5f, tryckN = 0.0f, rmsIn = 0.0f, rmsUt = 0.0f, kompN = 1.0f, rmsK = 0.0001f;
 };
 } // namespace fack

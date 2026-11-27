@@ -189,5 +189,9 @@ inline constexpr Par kOrdlista[] =
     { "En kanal får en långsam filterbåge genom delen: stängd, öppen i mitten, stängd igen.", "One channel gets a slow filter arc through the part: closed, open in the middle, closed again." },
     { "Basen börjar stängd och sveper upp under droppets första takt.", "The bass starts closed and sweeps open during the first bar of the drop." },
     { "Kicken andas ut de två sista slagen i en 16-taktsfras.", "The kick breathes out for the last two beats of a 16-bar phrase." },
+    { "MJUKHET", "SMOOTHNESS" },
+    { "TRYCK", "PRESSURE" },
+    { "Hur mjukt motorn byter. Högt: element glider in och ut med filter under upp till två takter, en sak ändras i taget och uppbyggnader blir aldrig för korta. 0 = tvära byten som förr.", "How smoothly the engine changes. High: elements glide in and out with filters over up to two bars, one thing changes at a time and build-ups are never too short. 0 = hard switches like before." },
+    { "Mättnad som gör varje kanal tätare och hårdare utan att den blir högre. Motorn trycker mest i droppet och minst i breaket.", "Saturation that makes every channel denser and harder without making it louder. The engine pushes hardest in the drop and least in the break." },
 };
 } // namespace sprak
