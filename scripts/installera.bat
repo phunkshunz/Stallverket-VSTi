@@ -21,6 +21,13 @@ if errorlevel 1 (
   exit /b 1
 )
 
+rem Ljudbanken (BETONGs ljud) for BETONG-KASSETTEN, delas av alla MASKINHALLEN-maskiner
+if exist "Ljudbank" (
+  if not exist "%USERPROFILE%\Music\MASKINHALLEN\Ljudbank" mkdir "%USERPROFILE%\Music\MASKINHALLEN\Ljudbank"
+  xcopy "Ljudbank" "%USERPROFILE%\Music\MASKINHALLEN\Ljudbank\" /e /i /y /q >nul
+  echo Ljudbanken ligger i %USERPROFILE%\Music\MASKINHALLEN\Ljudbank
+)
+
 echo.
 echo Klart! STALLVERKET ligger nu i:
 echo   %DEST%

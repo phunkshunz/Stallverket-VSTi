@@ -21,6 +21,8 @@ jobs:
           ./motor_test
           c++ -std=c++17 -O2 -Isrc tests/delare_test.cpp -o delare_test
           ./delare_test
+          c++ -std=c++17 -O2 -Isrc tests/kassett_test.cpp -o kassett_test
+          ./kassett_test
 
       - name: Konfigurera
         run: >
@@ -40,6 +42,9 @@ jobs:
           cp -R "$ART/AU/STALLVERKET.component" dist/STALLVERKET/
           cp scripts/installera.command dist/STALLVERKET/
           cp README.md dist/STALLVERKET/LASMIG.md
+          # BETONGs ljud blir ljudbanken för BETONG-KASSETTEN
+          git clone --depth 1 https://github.com/phunkshunz/Betong-VSTi.git betong
+          cp -R betong/assets/library dist/STALLVERKET/Ljudbank
           chmod +x dist/STALLVERKET/installera.command
           for b in dist/STALLVERKET/STALLVERKET.vst3 dist/STALLVERKET/STALLVERKET.component; do
             codesign --force --deep --sign - "$b"
@@ -71,6 +76,8 @@ jobs:
           Copy-Item -Recurse "$ART/VST3/STALLVERKET.vst3" dist/STALLVERKET/
           Copy-Item scripts/installera.bat dist/STALLVERKET/
           Copy-Item README.md dist/STALLVERKET/LASMIG.md
+          git clone --depth 1 https://github.com/phunkshunz/Betong-VSTi.git betong
+          Copy-Item -Recurse betong/assets/library dist/STALLVERKET/Ljudbank
           Compress-Archive -Path dist/STALLVERKET -DestinationPath dist/STALLVERKET-Windows.zip
 
       - name: Ladda upp
@@ -102,6 +109,8 @@ jobs:
           cp -R build/Stallverket_artefacts/Release/LV2/*.lv2 dist/STALLVERKET/
           cp scripts/installera-linux.sh dist/STALLVERKET/
           chmod +x dist/STALLVERKET/installera-linux.sh
+          git clone --depth 1 https://github.com/phunkshunz/Betong-VSTi.git betong
+          cp -R betong/assets/library dist/STALLVERKET/Ljudbank
           cd dist && zip -r -y STALLVERKET-Linux.zip STALLVERKET
 
       - name: Ladda upp

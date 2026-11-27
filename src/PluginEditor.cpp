@@ -5,7 +5,7 @@ namespace
 {
 constexpr int kCentralB = 920, kCentralH = 640;
 constexpr int kTidH = 380;
-constexpr int kKanalB = 540, kKanalH = 296;
+constexpr int kKanalB = 540, kKanalH = 330;
 
 juce::Colour delFarg (int d)
 {
@@ -189,6 +189,51 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     }
     addChildComponent (delaKnapp);
 
+    // ---- BETONG-KASSETT
+    kassettKnapp.setButtonText (utf8 ("KASSETT"));
+    kassettKnapp.setClickingTogglesState (true);
+    kassettAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.state, "kassett", kassettKnapp);
+    kassettKnapp.setTooltip (utf8 ("BETONG-KASSETT: kanalen spelar ett BETONG-kit med ett BETONG-mönster, och motorn leker med det ihop med alla andra kanaler: spår för spår in och ut, B-mönster i droppet, kick 2 i byggen, fills i frasslut. Lägg STÄLLVERKET på ett tomt spår och tänd KASSETT."));
+    {
+        // kit och mönster i undermenyer efter BETONGs mappar
+        auto fyll = [] (juce::ComboBox& c, auto& lista, int antal)
+        {
+            juce::String forra;
+            for (int i = 0; i < antal; ++i)
+            {
+                const juce::String g = lista[i].group != nullptr ? juce::String::fromUTF8 (lista[i].group) : juce::String();
+                if (g != forra) { c.addSectionHeading (g); forra = g; }
+                c.addItem (juce::String::fromUTF8 (lista[i].name), i + 1);
+            }
+        };
+        fyll (kassettKit, kassett::kKits, kassett::kNumKits);
+        fyll (kassettMonster, kassett::kPatterns, kassett::kNumPatterns);
+    }
+    kassettKitAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.state, "k_kit", kassettKit);
+    kassettMonsterAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.state, "k_monster", kassettMonster);
+    kassettKit.setTooltip (utf8 ("BETONG-kit. Ljuden läses från Musik/MASKINHALLEN/Ljudbank (följer med i zippen)."));
+    kassettMonster.setTooltip (utf8 ("BETONG-mönster. Motorn byter till grannmönstret ur samma mapp när låten byter del."));
+    kassettLek.setSliderStyle (juce::Slider::LinearBar);
+    kassettLek.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+    kassettLek.setColour (juce::Slider::trackColourId, ArmColours::sodiumDk);
+    kassettLekAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.state, "k_lek", kassettLek);
+    kassettLek.setTooltip (utf8 ("LEK: hur mycket motorn leker med kassetten: B-mönster, kick 2/rumble, perc-byten och fills."));
+    kassettMappKnapp.setButtonText (utf8 ("MAPP"));
+    kassettMappKnapp.setTooltip (utf8 ("Välj en egen mapp med ljud: de 16 första ljudfilerna blir pad 1-16 (1 kick, 3 sluten hat, 4 öppen hat, 5 clap ...). Avbryt = tillbaka till BETONG-kitet."));
+    kassettMappKnapp.onClick = [this]
+    {
+        valjare = std::make_unique<juce::FileChooser> (utf8 ("Välj en mapp med ljud"), proc.ljudbank(), "");
+        juce::Component::SafePointer<StallverketEditor> sp (this);
+        valjare->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                              [sp] (const juce::FileChooser& fc)
+                              {
+                                  if (sp == nullptr) return;
+                                  sp->proc.valjKassettMapp (fc.getResult());   // tomt = BETONG-kitet
+                              });
+    };
+    for (auto* c : std::initializer_list<juce::Component*> { &kassettKnapp, &kassettKit, &kassettMonster, &kassettLek, &kassettMappKnapp })
+        addChildComponent (c);
+
     // ---- trick
     const char* trickId[] = { "t_frys", "t_halvtid", "t_bak", "t_vinyl", "t_radio", "t_eko", "t_tomrum",
                               "t_stam", "t_glapp", "t_byt", "t_spoke", "t_stopp",
@@ -343,6 +388,8 @@ void StallverketEditor::byggLayout()
         c->setVisible (centralVy);
     for (auto* c : std::initializer_list<juce::Component*> { &centralKnapp, &kanalVal, &rollVal, &sprakKnapp }) c->setVisible (true);
     delaKnapp.setVisible (! centralVy);
+    for (auto* c : std::initializer_list<juce::Component*> { &kassettKnapp, &kassettKit, &kassettMonster, &kassettLek, &kassettMappKnapp })
+        c->setVisible (! centralVy);
     for (auto& c : delVal) c.setVisible (! centralVy);
     for (auto* c : { &flikLat, &flikKurva, &flikMall, &flikTrick, &exportKnapp }) c->setVisible (centralVy);
     visaVy (vy);
@@ -403,7 +450,20 @@ void StallverketEditor::resized()
     {
         kanalYta = r;
         tidYta = {};
-        auto rad = r.reduced (12, 10).removeFromBottom (24);
+        auto inre = r.reduced (12, 10);
+        auto rad = inre.removeFromBottom (24);
+        inre.removeFromBottom (6);
+        auto kRad = inre.removeFromBottom (24);
+        kassettYta = kRad;
+        kassettKnapp.setBounds (kRad.removeFromLeft (96));
+        kRad.removeFromLeft (8);
+        kassettMappKnapp.setBounds (kRad.removeFromRight (52));
+        kRad.removeFromRight (6);
+        kassettLek.setBounds (kRad.removeFromRight (64).reduced (0, 5));
+        kRad.removeFromRight (30);   // texten LEK
+        kassettKit.setBounds (kRad.removeFromLeft (kRad.getWidth() / 2 - 3));
+        kRad.removeFromLeft (6);
+        kassettMonster.setBounds (kRad);
         delaKnapp.setBounds (rad.removeFromLeft (96));
         rad.removeFromLeft (8);
         delarYta = rad;
@@ -667,7 +727,20 @@ void StallverketEditor::ritaKanalvy (juce::Graphics& g, juce::Rectangle<int> yta
 {
     using namespace ArmColours;
     drawPanel (g, yta, "", {});
-    auto r = yta.reduced (12, 10).withTrimmedBottom (32);
+    auto r = yta.reduced (12, 10).withTrimmedBottom (62);
+
+    // BETONG-KASSETT: LEK-texten och status (hur många ljud som hittades)
+    {
+        g.setColour (muted);
+        g.setFont (juce::FontOptions (9.0f, juce::Font::bold));
+        g.drawText (sprak::trU ("LEK"), kassettLek.getBounds().withX (kassettLek.getX() - 30).withWidth (28), juce::Justification::centredRight);
+        if (proc.kassettPa())
+        {
+            g.setColour (sodium);
+            g.setFont (juce::FontOptions (9.0f));
+            g.drawText (proc.kassettStatus(), kassettYta.withY (kassettYta.getY() - 13).withHeight (12).withTrimmedLeft (104), juce::Justification::centredLeft);
+        }
+    }
 
     // LOOPDELAREN: lampa per del (lyser när delen slår, mörk när motorn tagit bort den)
     {

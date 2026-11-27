@@ -14,6 +14,14 @@ cp -R STALLVERKET.component "$AU/"
 # Pluginet är osignerat, så macOS spärrar det. Detta tar bort spärren.
 xattr -dr com.apple.quarantine "$VST3/STALLVERKET.vst3" "$AU/STALLVERKET.component" STALLVERKET.app 2>/dev/null || true
 
+# Ljudbanken (BETONGs ljud) för BETONG-KASSETTEN, delas av alla MASKINHALLEN-maskiner
+if [ -d Ljudbank ]; then
+  BANK="$HOME/Music/MASKINHALLEN/Ljudbank"
+  mkdir -p "$BANK"
+  cp -R Ljudbank/. "$BANK/"
+  echo "Ljudbanken ligger i: $BANK"
+fi
+
 echo ""
 echo "Klart! STÄLLVERKET ligger nu i:"
 echo "  $VST3"

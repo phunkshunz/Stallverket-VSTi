@@ -2,6 +2,7 @@
 #include "PluginEditor.h"
 #include "Presets.h"
 #include "Licens.h"
+#include "Sprak.h"
 
 namespace
 {
@@ -122,6 +123,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout StallverketProcessor::skapaP
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "hall", 1 },    String::fromUTF8 ("Håll"), false));
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "slapp", 1 },   String::fromUTF8 ("Släpp"), false));
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "midiut", 1 },  "MIDI ut", true));
+    // BETONG-KASSETT (per kanal): kanalen spelar ett BETONG-kit med ett BETONG-mönster
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "kassett", 1 }, "Kassett", false));
+    {
+        StringArray kit; for (const auto& k : kassett::kKits) kit.add (String::fromUTF8 (k.name));
+        StringArray mon; for (const auto& m : kassett::kPatterns) mon.add (String::fromUTF8 (m.name));
+        p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { "k_kit", 1 }, "Kassett kit", kit, 6));
+        p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { "k_monster", 1 }, String::fromUTF8 ("Kassett mönster"), mon, 0));
+    }
+    knapp ("k_lek", "Kassett lek", 0.6f);
+    knapp ("k_volym", "Kassett volym", 0.8f);
     // LOOPDELAREN (per kanal): delar en loop i kick, clap, sluten och öppen hihat
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "dela", 1 }, "Dela loop", true));
     for (auto* id : { "d_kick", "d_clap", "d_hh", "d_oh" })
@@ -157,6 +168,7 @@ StallverketProcessor::StallverketProcessor()
 StallverketProcessor::~StallverketProcessor()
 {
     stopTimer();
+    kassettTrad.removeAllJobs (true, 4000);
     stangRec();
     auto& n = ledning::nav();
     uint32_t id = minId;
@@ -275,6 +287,7 @@ void StallverketProcessor::prepareToPlay (double sampleRate, int samplesPerBlock
     monoBuf.assign ((size_t) juce::jmax (4096, samplesPerBlock * 2), 0.0f);
     fack.forbered (sampleRate);
     lyssnare.forbered (sampleRate);
+    kassett.forbered (sampleRate);
     setLatencySamples (fack.latens());
 
     // Ny instans (inte laddad från ett projekt): välj själv plats.
@@ -453,7 +466,8 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     }
 
     const int k = kanal();
-    const int r = roll();
+    const bool kassettNu = las ("kassett") > 0.5f;
+    const int r = kassettNu ? motor::LOOP : roll();   // en kassett är en hel trummaskin: kanalen behandlas som LOOP
     const float djup = juce::jlimit (0.0f, 1.0f, v[11] * v[12 + k]);
 
     auto* L = buffer.getWritePointer (0);
@@ -470,7 +484,7 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     float inTopp = 0.0f;
     for (int i = 0; i < n; ++i) inTopp = juce::jmax (inTopp, std::abs (L[i]), std::abs (R[i]));
     if (inTopp > 0.0005f) nav.kanal[k].ljud.store (nu);
-    if (play && rollVal() == kRollAuto)
+    if (play && rollVal() == kRollAuto && ! kassettNu)
     {
         for (int i = 0; i < n; ++i) lyssnare.sampla (0.5f * (L[i] + R[i]), ppq + i * slagPerSampel);
         autoRoll.store (lyssnare.roll());
@@ -498,8 +512,27 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     const float pumpTid = 0.12f + v[kIPumpTid] * 0.7f;
     const float kickDjup = kickKanal >= 0 ? juce::jlimit (0.0f, 1.0f, v[11] * v[12 + kickKanal]) : 0.0f;
 
+    // ---- BETONG-KASSETT: spelar kitet och lägger det till kanalen, innan ställverket behandlar ljudet.
+    // Varje spår i mönstret får sin nivå av motorn som om det låg på en egen kanal.
+    if (kassettNu)
+    {
+        const float lek = las ("k_lek");
+        const float djupK = juce::jlimit (0.0f, 1.0f, v[11] * v[12 + k]);
+        kassett.kor (L, R, n, ppq, slagPerSampel, play, las ("k_volym") * 0.6f,
+                     [&] (int roll_, double s, float& lp)
+                     {
+                         const auto a = motor::atgard (plan, in, ov, k * 7 + 61 + roll_, roll_, s, slagPerTakt);
+                         lp = 1.0f + (a.lp - 1.0f) * djupK;
+                         return 1.0f + (a.niva - 1.0f) * djupK;
+                     },
+                     [&] (double s) { return kassett::lekFor (plan, in, ov, k, s, slagPerTakt, lek * djupK); });
+        float topp = 0.0f;
+        for (int i = 0; i < n; ++i) topp = juce::jmax (topp, std::abs (L[i]));
+        if (topp > 0.0005f) nav.kanal[k].ljud.store (nu);
+    }
+
     fack.sattRoll (r);
-    const bool dela = (r == motor::LOOP || r == motor::PERC) && las ("dela") > 0.5f;
+    const bool dela = ! kassettNu && (r == motor::LOOP || r == motor::PERC) && las ("dela") > 0.5f;
     fack.sattDela (dela);
     int delVal[4];
     { const char* ids[] = { "d_kick", "d_clap", "d_hh", "d_oh" }; for (int i = 0; i < 4; ++i) delVal[i] = (int) las (ids[i]); }
@@ -512,6 +545,7 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
                   auto a = motor::atgard (plan, in, ov, k, r, s, slagPerTakt);
                   a.dela = dela;
                   for (int i = 0; i < 4; ++i) if (delVal[i] == 1) a.delar[i] = 1.0f; else if (delVal[i] == 2) a.delar[i] = 0.0f;
+                  if (kassettNu) { a.niva = 1.0f; a.grind = 0xFFFF; }   // kassetten sköter nivåerna själv, spår för spår
                   if (pump > 0.0f)
                   {
                       // pumpar bara när kicken faktiskt spelar enligt motorn
@@ -738,8 +772,82 @@ void StallverketProcessor::stangRec()
     skriver.store (false);
 }
 
+juce::File StallverketProcessor::ljudbank() const
+{
+    return juce::File::getSpecialLocation (juce::File::userMusicDirectory).getChildFile ("MASKINHALLEN").getChildFile ("Ljudbank");
+}
+
+void StallverketProcessor::valjKassettMapp (const juce::File& mapp)
+{
+    { const juce::ScopedLock l (kassettLas); kassettMapp = mapp.getFullPathName(); }
+    kassettKitLaddat = -1;   // ladda om
+}
+
+// Läser kitets ljud i bakgrunden: från en egen mapp (de 16 första ljudfilerna i bokstavsordning)
+// eller BETONG-kitets ljud ur ljudbanken. Saknas ett ljud spelar kassetten ett syntat reservljud.
+void StallverketProcessor::laddaKassett()
+{
+    const int kit = juce::jlimit (0, kassett::kNumKits - 1, (int) las ("k_kit"));
+    juce::String mapp;
+    { const juce::ScopedLock l (kassettLas); mapp = kassettMapp; }
+    if (kit == kassettKitLaddat && mapp == kassettMappLaddad) return;
+    kassettKitLaddat = kit;
+    kassettMappLaddad = mapp;
+    const auto bank = ljudbank();
+    kassettTrad.removeAllJobs (true, 2000);
+    kassettTrad.addJob ([this, kit, mapp, bank]
+    {
+        juce::AudioFormatManager format;
+        format.registerBasicFormats();
+        juce::Array<juce::File> filer;
+        filer.resize (kassett::kPads);
+        if (mapp.isNotEmpty() && juce::File (mapp).isDirectory())
+        {
+            auto alla = juce::File (mapp).findChildFiles (juce::File::findFiles, false, "*.wav;*.aif;*.aiff;*.flac;*.ogg;*.mp3");
+            alla.sort();
+            for (int i = 0; i < juce::jmin (kassett::kPads, alla.size()); ++i) filer.set (i, alla[i]);
+        }
+        else
+            for (int p = 0; p < kassett::kPads; ++p)
+                for (auto* ext : { ".flac", ".wav", ".aif" })
+                {
+                    const auto f = bank.getChildFile (juce::String::fromUTF8 (kassett::kKits[kit].pads[p]) + ext);
+                    if (f.existsAsFile()) { filer.set (p, f); break; }
+                }
+        int hittade = 0;
+        for (int p = 0; p < kassett::kPads; ++p)
+        {
+            kassett::LjudPtr ljud;
+            if (filer[p].existsAsFile())
+                if (std::unique_ptr<juce::AudioFormatReader> r (format.createReaderFor (filer[p])); r != nullptr)
+                {
+                    const int len = (int) juce::jmin<juce::int64> (r->lengthInSamples, (juce::int64) (r->sampleRate * 20.0));
+                    juce::AudioBuffer<float> b ((int) juce::jmin (2u, r->numChannels), len);
+                    r->read (&b, 0, len, 0, true, true);
+                    auto l = std::make_shared<kassett::Ljud>();
+                    l->sr = r->sampleRate;
+                    l->namn = filer[p].getFileNameWithoutExtension().toStdString();
+                    l->L.assign (b.getReadPointer (0), b.getReadPointer (0) + len);
+                    if (b.getNumChannels() > 1) l->R.assign (b.getReadPointer (1), b.getReadPointer (1) + len);
+                    ljud = l;
+                    ++hittade;
+                }
+            kassett.sattLjud (p, ljud);
+        }
+        const juce::ScopedLock l (kassettLas);
+        if (mapp.isNotEmpty()) kassettText = juce::File (mapp).getFileName() + ": " + juce::String (hittade) + sprak::trU (" ljud");
+        else if (hittade == 0) kassettText = sprak::trU ("LJUDBANKEN SAKNAS: SYNTADE LJUD");
+        else kassettText = juce::String::fromUTF8 (kassett::kKits[kit].name) + ": " + juce::String (hittade) + "/16";
+    });
+}
+
 void StallverketProcessor::timerCallback()
 {
+    if (las ("kassett") > 0.5f)
+    {
+        laddaKassett();
+        kassett.sattMonster ((int) las ("k_monster"));   // här och inte i ljudtråden: det allokerar
+    }
     static juce::TimeSliceThread skrivTrad ("STALLVERKET skrivare");
     auto& n = ledning::nav();
     const int64_t id = n.recId.load();
@@ -936,6 +1044,7 @@ void StallverketProcessor::getStateInformation (juce::MemoryBlock& destData)
     c.setProperty ("har", harCache, nullptr);
     s.setProperty ("preset", aktivtPresetNamn, nullptr);
     s.setProperty ("skrift", skriftText, nullptr);
+    { const juce::ScopedLock l (kassettLas); s.setProperty ("kassettmapp", kassettMapp, nullptr); }
     if (auto xml = s.createXml()) copyXmlToBinary (*xml, destData);
 }
 
@@ -953,6 +1062,9 @@ void StallverketProcessor::setStateInformation (const void* data, int sizeInByte
     aktivtPresetNamn = s.getProperty ("preset", "").toString();
     sattSkrift (s.getProperty ("skrift", skriftText).toString());
     s.removeProperty ("skrift", nullptr);
+    { const juce::ScopedLock l (kassettLas); kassettMapp = s.getProperty ("kassettmapp", "").toString(); }
+    s.removeProperty ("kassettmapp", nullptr);
+    kassettKitLaddat = -1;
     state.replaceState (s);
     tillstandLaddat = true;
 }

@@ -86,6 +86,14 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> delaAtt;
     void uppdateraDelar();
     juce::Rectangle<int> delarYta;
+    // BETONG-KASSETT i kanalvyn
+    juce::TextButton kassettKnapp, kassettMappKnapp;
+    juce::ComboBox kassettKit, kassettMonster;
+    juce::Slider kassettLek;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> kassettAtt;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> kassettKitAtt, kassettMonsterAtt;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> kassettLekAtt;
+    juce::Rectangle<int> kassettYta;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> centralAtt;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> kanalAtt, rollAtt, mallAtt, formAtt;

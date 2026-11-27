@@ -57,6 +57,16 @@ Ligger det en trumloop på en kanal (ROLL = LOOP eller PERC, AUTO hittar trumloo
 - **DELA LOOP** i kanalvyn slår på och av. **KICK / CLAP / HH / OH**: klicka för AUTO (motorn bestämmer), PÅ (alltid kvar) eller AV (alltid borta). Lampan lyser när delen slår.
 - Med alla delar på är ljudet exakt som originalet.
 
+## BETONG-KASSETT
+
+Gör en STÄLLVERKET-kanal till en BETONG. Lägg STÄLLVERKET på ett tomt spår och tänd **KASSETT** i kanalvyn. Kanalen spelar ett BETONG-kit (44 kit) med ett BETONG-mönster (189 mönster), och motorn leker med det ihop med alla andra kanaler:
+
+- Varje spår i mönstret behandlas som en egen kanal: kick, hats, clap, perc, bas och stab kommer in en i taget, försvinner i breaket och byter i turordning.
+- **LEK** styr hur mycket motorn leker: byter till grannmönstret ur samma mapp (B-mönstret) när låten byter del, spelar kick 2/rumble i byggen och breaks, byter perc A och B, lägger fills i frasslut och tätar hihatsen i uppbyggnaden.
+- Ljudet går sedan genom ställverket som vanligt: filter, stutter, rum, pump och TRYCK.
+- Ljuden läses från **Musik/MASKINHALLEN/Ljudbank**. Ljudbanken följer med i zippen och installeras av installationsskriptet. Den är tänkt att delas av alla MASKINHALLEN-maskiner. Saknas den spelar kassetten egna syntade trumljud.
+- **MAPP**: välj en egen mapp med ljud. De 16 första ljudfilerna (bokstavsordning) blir pad 1-16: 1 kick, 2 kick 2/rumble, 3 sluten hat, 4 öppen hat, 5 clap, 6 snare, 7-12 perc, 13 bas, 14 stab, 15 lead/textur, 16 röst/FX. Avbryt i dialogen = tillbaka till BETONG-kitet.
+
 ## REC
 
 **REC** på CENTRAL spelar in varje kanal som en egen WAV-fil (24 bit) i `Skrivbord/STÄLLVERKET inspelningar/<datum och tid>/`, till exempel `01 KICK.wav`, `02 BAS.wav`. Alla börjar och slutar på samma hela takt, så filerna ligger exakt i linje när du drar in dem i en DAW. Trycker du REC när transporten står börjar inspelningen när du trycker play. Vill du ha hela mixen i en fil: lägg CENTRAL på mastern med ROLL = ORÖRD, då blir den `MIX (CENTRAL).wav`.

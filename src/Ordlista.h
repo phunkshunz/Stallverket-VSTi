@@ -198,5 +198,16 @@ inline constexpr Par kOrdlista[] =
     { "LOOPDELAREN: delar loopen i kick, clap, sluten och öppen hihat. Motorn tar bort och lägger till dem var för sig, som om de låg på egna kanaler. Gäller kanaler med ROLL = LOOP eller PERC.", "LOOP SPLITTER: splits the loop into kick, clap, closed and open hi-hat. The engine removes and adds them one by one, as if they were on their own channels. Works on channels with ROLE = LOOP or PERC." },
     { "PÅ", "ON" },
     { "AV", "OFF" },
+    { "KASSETT", "CASSETTE" },
+    { "LEK", "PLAY" },
+    { "MAPP", "FOLDER" },
+    { " ljud", " sounds" },
+    { "LJUDBANKEN SAKNAS: SYNTADE LJUD", "SOUND BANK MISSING: SYNTH SOUNDS" },
+    { "Välj en mapp med ljud", "Choose a folder of sounds" },
+    { "BETONG-KASSETT: kanalen spelar ett BETONG-kit med ett BETONG-mönster, och motorn leker med det ihop med alla andra kanaler: spår för spår in och ut, B-mönster i droppet, kick 2 i byggen, fills i frasslut. Lägg STÄLLVERKET på ett tomt spår och tänd KASSETT.", "BETONG CASSETTE: the channel plays a BETONG kit with a BETONG pattern, and the engine plays with it together with all other channels: lane by lane in and out, B pattern in the drop, kick 2 in build-ups, fills at phrase ends. Put STÄLLVERKET on an empty track and light CASSETTE." },
+    { "BETONG-kit. Ljuden läses från Musik/MASKINHALLEN/Ljudbank (följer med i zippen).", "BETONG kit. The sounds are read from Music/MASKINHALLEN/Ljudbank (included in the zip)." },
+    { "BETONG-mönster. Motorn byter till grannmönstret ur samma mapp när låten byter del.", "BETONG pattern. The engine switches to the neighbouring pattern from the same folder when the track changes part." },
+    { "LEK: hur mycket motorn leker med kassetten: B-mönster, kick 2/rumble, perc-byten och fills.", "PLAY: how much the engine plays with the cassette: B patterns, kick 2/rumble, perc swaps and fills." },
+    { "Välj en egen mapp med ljud: de 16 första ljudfilerna blir pad 1-16 (1 kick, 3 sluten hat, 4 öppen hat, 5 clap ...). Avbryt = tillbaka till BETONG-kitet.", "Choose your own folder of sounds: the first 16 audio files become pads 1-16 (1 kick, 3 closed hat, 4 open hat, 5 clap ...). Cancel = back to the BETONG kit." },
 };
 } // namespace sprak

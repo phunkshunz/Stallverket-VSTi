@@ -7,6 +7,7 @@
 #include "Ledning.h"
 #include "Fack.h"
 #include "Lyssna.h"
+#include "Kassett.h"
 
 // STÄLLVERKET: maskinen som alla kanaler går igenom.
 //
@@ -100,6 +101,13 @@ public:
     bool laddaMall (const juce::File& f);
     juce::File exporteraMidi();
 
+    // ---- BETONG-KASSETT
+    bool kassettPa() const { return las ("kassett") > 0.5f; }
+    juce::File ljudbank() const;                       // Musik/MASKINHALLEN/Ljudbank
+    void valjKassettMapp (const juce::File& mapp);     // egen mapp med ljud (tom = BETONG-kitet)
+    juce::String kassettStatus() const { const juce::ScopedLock l (kassettLas); return kassettText; }
+    float kassettPad (int pad) const { return kassett.padAktivitet (pad); }
+
     // ---- SKRIFTEN
     void sattSkrift (const juce::String& txt);
     juce::String skrift() const { return skriftText; }
@@ -113,6 +121,13 @@ private:
 
     double sr = 48000.0;
     fack::Fack fack;
+    kassett::Kassett kassett;
+    juce::ThreadPool kassettTrad { 1 };
+    juce::CriticalSection kassettLas;
+    juce::String kassettText, kassettMapp;
+    int kassettKitLaddat = -1;
+    juce::String kassettMappLaddad;
+    void laddaKassett();
     lyssna::Lyssnare lyssnare;
     std::atomic<int> autoRoll { -1 }, autoAktiv { -1 };
     double klocka = 0.0, forvantat = 0.0;
