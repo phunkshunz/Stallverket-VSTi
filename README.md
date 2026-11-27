@@ -44,6 +44,8 @@ CENTRAL behandlar också ljudet på sin egen kanal, så den kan ligga på t.ex. 
   - *I groovet*: STAMNING, BANDGLAPP, KANALBYTE, SPÖKEKO, STOPP-SLAG, FASFÖRSKJUTNING (en kanal glider en 1/16 var åttonde takt, som hos Reich), FILTERBÅGE (långsam filterbåge genom delen), KICKPAUS (kicken andas ut i 16-taktsfrasens slut), BASDYK (basen lyfts ur med högpass sista slaget i frasen och smäller tillbaka på ettan)
 - **Nya mallar**: SPEGEL (bygger upp och samma väg tillbaka), STAPLA (en kanal i taget, sedan ras), FALSKT DROP (uppbyggnad, sedan break, droppet efter), DUELL (fråga och svar mellan kanaler), TELEFON (allt i telefonlur tills droppet), SVÄRM (element tänds och släcks hela tiden), SKRIFTEN (följer texten du skriver under TRICK, t.ex. `I16 G32 B16 U8 D16 K32 O16`), PLASTIK (en perc-kanal står fast hela låten, kicken hålls borta länge och smäller sedan in, claps och rides kommer och går), HOOD (temat får spela länge, ett nytt element ungefär varannan minut, inget hoppar ur).
 
+- **Mallar efter labelsound** (hur låtarna byggs, inte hur de låter): **STOCKHOLM 96** (hårt, slagverksdrivet och loopbaserat som tidiga Drumcode, Planet Rhythm och Svek: få och korta breaks, hårda klipp, mycket stök), **RUMÄNSK** (långt och hypnotiskt som Rhadoo, Raresh och Petre Inspirescu: loopar som får ta tid, nästan inga breaks), **PERLON** (mikroförändringar, filter och dub, sällan stora drop), **KANAL** (dubtechno som Basic Channel och Chain Reaction: ett mönster som står, ekon och filter i stället för drop) och **MÖRKER** (spänning, långa byggen med muller och ett stort drop som Dubfire och SCI+TEC). PLASTIK och HOOD finns sedan förut för M_nus och M-Plant.
+- **LÄS REFERENS** (under KURVA): välj en låt du gillar. Ställverket mäter energin och var basen försvinner per 8 takter i DAW:ens tempo, och gör KURVAN och SKRIFTEN av det (t.ex. `I16 G32 B16 U8 D32 G16 O16`). Mallen byts till SKRIFTEN, så nästa låt byggs som referensen. Inget ljud sparas, bara formen.
 - **KURVA**: rita energin över hela setet med åtta punkter (128 till 2048 takter, 512 takter är ungefär en timme i 130 BPM). Tänd **KURVA PÅ**, så ersätter kurvan ENERGI-ratten: lågt = fler breaks och färre element, högt = fler klimax.
 - **MALL**: bygg en egen mall. Längd per del, chanser (lyft, break, direkt bygg, direkt drop, klimax, utandning) och karaktär (hårda klipp, stök, dubkast, filter, atmo först). Välj **EGEN** i mallmenyn för att höra den. **KOPIERA MALL** tar mallen som spelar som startpunkt. Egna mallar sparas som `.stallmall` i `Dokument/Phunkshunz/STALLVERKET/Mallar`.
 - **SPARA MIDI**: sparar låten som MIDI-fil i `Dokument/Phunkshunz/STALLVERKET/Export` och visar den i Finder. Ett spår med delarna (markörer + noter C1 och uppåt) och ett spår per kanal med en not när kanalen spelar, plus nivå (CC 11), lågpass (CC 74) och högpass (CC 75). Dra in filen i Bitwig.
@@ -91,7 +93,7 @@ Fullversionen låses upp med en nyckel från Payhip. Klistra in den en gång, s�
 
 ## Presets
 
-40 fabrikspresets (motor-presets). Egna sparas med **SPARA** som `.stallverket`-filer i
+68 fabrikspresets (motor-presets), varav 16 efter labelsound (STOCKHOLM 96, RUMÄNSK, PERLON, KANAL och MÖRKER). Egna sparas med **SPARA** som `.stallverket`-filer i
 `Dokument/Phunkshunz/STALLVERKET/Presets`. Lägg en mapp med `.stallverket`-filer där (ett preset-pack), så syns de i listan under EGNA.
 
 Filformatet är vanlig XML:
@@ -116,4 +118,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 c++ -std=c++17 -Isrc tests/motor_test.cpp -o motor_test && ./motor_test
 c++ -std=c++17 -O2 -Isrc tests/delare_test.cpp -o delare_test && ./delare_test
+c++ -std=c++17 -O2 -Isrc tests/kassett_test.cpp -o kassett_test && ./kassett_test
+c++ -std=c++17 -O2 -Isrc tests/glitch_test.cpp -o glitch_test && ./glitch_test
+c++ -std=c++17 -O2 -Isrc tests/referens_test.cpp -o referens_test && ./referens_test
 ```

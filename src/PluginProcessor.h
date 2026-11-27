@@ -8,6 +8,7 @@
 #include "Fack.h"
 #include "Lyssna.h"
 #include "Kassett.h"
+#include "Referens.h"
 
 // STÄLLVERKET: maskinen som alla kanaler går igenom.
 //
@@ -108,6 +109,10 @@ public:
     juce::String kassettStatus() const { const juce::ScopedLock l (kassettLas); return kassettText; }
     float kassettPad (int pad) const { return kassett.padAktivitet (pad); }
 
+    // ---- REFERENSLÄSAREN: en låt blir kurva + skrift
+    void lasReferens (const juce::File& fil);
+    juce::String referensStatus() const { const juce::ScopedLock l (refLas); return refText; }
+
     // ---- SKRIFTEN
     void sattSkrift (const juce::String& txt);
     juce::String skrift() const { return skriftText; }
@@ -128,6 +133,10 @@ private:
     int kassettKitLaddat = -1;
     juce::String kassettMappLaddad;
     void laddaKassett();
+    juce::CriticalSection refLas;
+    juce::String refText;
+    std::unique_ptr<referens::Resultat> refKlar;   // läses av timern och läggs in i parametrarna
+    std::atomic<double> bpmNu { 130.0 };
     lyssna::Lyssnare lyssnare;
     std::atomic<int> autoRoll { -1 }, autoAktiv { -1 };
     double klocka = 0.0, forvantat = 0.0;

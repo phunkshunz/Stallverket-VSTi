@@ -229,5 +229,17 @@ inline constexpr Par kOrdlista[] =
     { "EKO", "ECHO" },
     { "SVEP", "SWEEP" },
     { "KROSS", "CRUSH" },
+    { "LÄS REFERENS", "READ REFERENCE" },
+    { "Välj en referenslåt", "Choose a reference track" },
+    { "Välj en låt du gillar (WAV, AIFF, FLAC, MP3). Ställverket mäter energin och var basen försvinner per 8 takter, i DAW:ens tempo, och gör kurvan och SKRIFTEN av det. Inget ljud sparas, bara hur låten är byggd.", "Choose a track you like (WAV, AIFF, FLAC, MP3). STÄLLVERKET measures the energy and where the bass drops out per 8 bars, at the DAW tempo, and turns it into the curve and THE SCRIPT. No audio is stored, only how the track is built." },
+    { "LÄSER ", "READING " },
+    { "KAN INTE LÄSA FILEN", "CAN'T READ THE FILE" },
+    { "FÖR KORT LÅT", "TRACK TOO SHORT" },
+    { " takter i ", " bars at " },
+    { "Referens", "Reference" },
+    { "EFTER LABELSOUND", "LABEL STYLES" },
+    { "RUMÄNSK", "ROMANIAN" },
+    { "MÖRKER", "DARKNESS" },
+    { "KANAL", "CHANNEL" },
 };
 } // namespace sprak

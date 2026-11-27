@@ -88,7 +88,19 @@ inline constexpr Mall kMallar[] =
     { "SKRIFTEN",    { 16,32,16,16, 8,16,32,16,16 }, 0.35f,0.40f,0.15f,0.15f,0.50f,0.30f, 0.5f,0.3f,0.2f,0.5f, false, S_SKRIFT },
     { "PLASTIK",     { 64,64,32,16,32,32,64,32,32 }, 0.40f,0.30f,0.20f,0.20f,0.45f,0.30f, 0.3f,0.2f,0.4f,0.9f, true,  S_PLASTIK },
     { "HOOD",        { 32,64,32, 8, 8,64,64,32,32 }, 0.20f,0.10f,0.05f,0.60f,0.30f,0.25f, 0.6f,0.1f,0.1f,0.6f, false, S_HOOD },
+    // efter labelsound (se README): hur låtarna byggs, inte hur de låter
+    // STOCKHOLM 96: hårt, slagverksdrivet och loopbaserat (tidiga Drumcode/Planet Rhythm). Få och korta breaks, hårda klipp, mycket stök.
+    { "STOCKHOLM 96", { 16,64,16, 8, 8,32,64,16,16 }, 0.30f,0.20f,0.25f,0.55f,0.60f,0.15f, 0.85f,0.7f,0.05f,0.35f, false },
+    // RUMÄNSK: långt och hypnotiskt, loopar som får ta tid, nästan inga breaks, tålamod (Rhadoo, Raresh, Petre Inspirescu).
+    { "RUMÄNSK",     { 64,64,32, 8, 8,64,64,64,64 }, 0.55f,0.05f,0.05f,0.50f,0.20f,0.50f, 0.1f,0.15f,0.25f,0.9f, true },
+    // PERLON: mikroförändringar, filter och dub, sällan stora drop (Villalobos, Zip).
+    { "PERLON",      { 32,64,32,16, 8,32,32,32,32 }, 0.50f,0.20f,0.05f,0.60f,0.20f,0.45f, 0.15f,0.35f,0.5f,0.85f, false },
+    // KANAL: dubtechno, ett mönster som inte ändras, ekon och filter i stället för drop (Basic Channel, Chain Reaction).
+    { "KANAL",       { 32,64,32,32, 8,32,32,32,32 }, 0.40f,0.30f,0.02f,0.70f,0.15f,0.50f, 0.05f,0.05f,1.0f,0.8f, true },
+    // MÖRKER: spänning, långa byggen med muller och ett stort drop (Dubfire, SCI+TEC).
+    { "MÖRKER",      { 32,32,16,16,32,32,32,16,16 }, 0.30f,0.45f,0.25f,0.05f,0.65f,0.20f, 0.55f,0.45f,0.25f,0.7f, false },
 };
+inline constexpr int kAntalGamlaMallar = 17;   // mallarna före EGEN i menyn (äldre projekt sparar menyns plats)
 inline constexpr int kAntalMallar = (int) (sizeof (kMallar) / sizeof (kMallar[0]));
 
 //==============================================================================
@@ -168,6 +180,21 @@ inline int lasSkrift (const char* txt, int* ut, int max)
         ut[n++] = (typ << 8) | l;
     }
     return n;
+}
+
+// Menyn: de 17 första mallarna, sedan EGEN, sedan de nyare. Så att äldre projekt
+// med EGEN vald fortfarande får EGEN (menyns plats sparas i projektet).
+inline int mallFranMeny (int val)
+{
+    if (val < kAntalGamlaMallar) return val;
+    if (val == kAntalGamlaMallar) return kAntalMallar;   // EGEN
+    return val - 1;
+}
+inline int menyFranMall (int mall)
+{
+    if (mall >= kAntalMallar) return kAntalGamlaMallar;  // EGEN
+    if (mall < kAntalGamlaMallar) return mall;
+    return mall + 1;
 }
 
 inline const Mall& mallFor (const Installning& in)

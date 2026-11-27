@@ -50,8 +50,10 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
 
     for (int i = 1; i <= ledning::kKanaler; ++i) kanalVal.addItem (utf8 ("KANAL ") + juce::String (i), i);
     for (int i = 0; i <= motor::NUM_ROLL + 1; ++i) rollVal.addItem (rollText (i), i + 1);
-    for (int i = 0; i < motor::kAntalMallar; ++i) mallVal.addItem (juce::String::fromUTF8 (motor::kMallar[i].namn), i + 1);
-    mallVal.addItem ("EGEN", motor::kAntalMallar + 1);
+    for (int i = 0; i < motor::kAntalGamlaMallar; ++i) mallVal.addItem (juce::String::fromUTF8 (motor::kMallar[i].namn), i + 1);
+    mallVal.addItem ("EGEN", motor::kAntalGamlaMallar + 1);
+    mallVal.addSectionHeading (utf8 ("EFTER LABELSOUND"));
+    for (int i = motor::kAntalGamlaMallar; i < motor::kAntalMallar; ++i) mallVal.addItem (juce::String::fromUTF8 (motor::kMallar[i].namn), i + 2);
     for (int i = 0; i < motor::kAntalFormer; ++i) formVal.addItem (motor::kFormNamn[i], i + 1);
     kanalAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.state, "kanal", kanalVal);
     rollAtt  = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.state, "roll", rollVal);
@@ -126,6 +128,16 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     for (auto* t : { "128", "256", "512", "1024", "2048" }) kurvLangd.addItem (juce::String (t) + utf8 (" TAKTER"), kurvLangd.getNumItems() + 1);
     kurvLangdAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (proc.state, "kurvalangd", kurvLangd);
     kurvLangd.setTooltip (utf8 ("Hur lång kurvan är. 512 takter är ungefär en timme i 130 BPM."));
+    refKnapp.setButtonText (utf8 ("LÄS REFERENS"));
+    refKnapp.setTooltip (utf8 ("Välj en låt du gillar (WAV, AIFF, FLAC, MP3). Ställverket mäter energin och var basen försvinner per 8 takter, i DAW:ens tempo, och gör kurvan och SKRIFTEN av det. Inget ljud sparas, bara hur låten är byggd."));
+    refKnapp.onClick = [this]
+    {
+        valjare = std::make_unique<juce::FileChooser> (utf8 ("Välj en referenslåt"), juce::File::getSpecialLocation (juce::File::userMusicDirectory), "*.wav;*.aif;*.aiff;*.flac;*.mp3;*.ogg");
+        juce::Component::SafePointer<StallverketEditor> sp (this);
+        valjare->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                              [sp] (const juce::FileChooser& fc) { if (sp != nullptr && fc.getResult().existsAsFile()) sp->proc.lasReferens (fc.getResult()); });
+    };
+    addChildComponent (refKnapp);
 
     // ---- mallredigerare
     const char* langdId[] = { "e_in", "e_gr", "e_ly", "e_br", "e_by", "e_dr", "e_kl", "e_ut", "e_ou" };
@@ -557,6 +569,9 @@ void StallverketEditor::resized()
         kurvaPa.setBounds (kRad.removeFromLeft (90));
         kRad.removeFromLeft (6);
         kurvLangd.setBounds (kRad.removeFromLeft (130));
+        kRad.removeFromLeft (6);
+        refKnapp.setBounds (kRad.removeFromLeft (120));
+        refYta = kRad.withTrimmedLeft (10);
         kv.removeFromTop (8);
         kurvYta = kv.reduced (20, 10);
 
@@ -938,6 +953,7 @@ void StallverketEditor::visaVy (int v)
     for (auto& k : kanalDjup) k.setVisible (c && vy == 0);
     for (auto* b : { &kurvaPa }) b->setVisible (c && vy == 1);
     kurvLangd.setVisible (c && vy == 1);
+    refKnapp.setVisible (c && vy == 1);
     for (auto& m : mallLangd) m.setVisible (c && vy == 2);
     for (auto& m : mallRatt) m.setVisible (c && vy == 2);
     for (auto* b : std::initializer_list<juce::Component*> { &atmoForst, &kopieraMall, &sparaMall, &laddaMall }) b->setVisible (c && vy == 2);
@@ -1097,8 +1113,14 @@ void StallverketEditor::ritaKurva (juce::Graphics& g, juce::Rectangle<int> yta)
     g.drawVerticalLine ((int) xs, r.getY(), r.getBottom());
     g.setColour (muted);
     g.setFont (juce::FontOptions (10.0f));
-    g.drawText (sprak::trU ("DRA I PUNKTERNA. ENERGIN STYR BREAKS, KLIMAX OCH HUR MYCKET SOM SPELAR."), yta.reduced (12).removeFromTop (18).withTrimmedLeft (220),
-                juce::Justification::centredRight);
+    const auto ref = proc.referensStatus();
+    if (ref.isNotEmpty())
+    {
+        g.setColour (sodium);
+        g.drawFittedText (ref, refYta, juce::Justification::centredLeft, 1);
+    }
+    else
+        g.drawText (sprak::trU ("DRA I PUNKTERNA. ENERGIN STYR BREAKS, KLIMAX OCH HUR MYCKET SOM SPELAR."), refYta, juce::Justification::centredRight);
 }
 
 void StallverketEditor::dragKurva (juce::Point<int> pos)

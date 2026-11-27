@@ -20,6 +20,7 @@ struct Fabrik
 
 // mall: 0 KLASSISK 1 MINIMAL 2 PEAK 3 HYPNOS 4 DOCKLANDS 5 STÖK 6 DUB 7 BERG-O-DAL
 //       8 SPEGEL 9 STAPLA 10 FALSKT DROP 11 DUELL 12 TELEFON 13 SVÄRM 14 SKRIFTEN 15 PLASTIK 16 HOOD
+//       17 STOCKHOLM 96 18 RUMÄNSK 19 PERLON 20 KANAL 21 MÖRKER   (motorns nummer, inte menyns)
 // form: 0 EVIG 1 64 2 128 3 192 4 256
 inline constexpr Fabrik kFabrik[] =
 {
@@ -76,6 +77,28 @@ inline constexpr Fabrik kFabrik[] =
     { "Minus en timme",            16, 4, 0.50f,0.10f,0.30f,0.50f,0.10f,0.60f,0.20f,0.20f, 94 },
     { "Hood i maskinhallen",       16, 0, 0.60f,0.20f,0.30f,0.40f,0.20f,0.50f,0.30f,0.10f, 13 },
     { "Dubkedjan",                  6, 0, 0.50f,0.50f,0.80f,0.60f,0.20f,0.70f,0.40f,1.00f, 27 },
+    //  efter labelsound                mall form energi var  bryt bygg stök filt andas dub  frö   mjuk  tryck
+    // STOCKHOLM 96: hårt, slagverk, loopar (tidiga Drumcode, Planet Rhythm, Svek)
+    { "Planet Rytm",               17, 0, 0.85f,0.40f,0.45f,0.30f,0.75f,0.35f,0.50f,0.05f, 95, 0.45f,0.60f },
+    { "Söder 03.00",               17, 0, 0.80f,0.55f,0.55f,0.40f,0.65f,0.45f,0.60f,0.10f, 303,0.55f,0.55f },
+    { "Loopverkstan",              17, 0, 0.75f,0.30f,0.30f,0.30f,0.85f,0.30f,0.30f,0.00f, 46, 0.40f,0.65f },
+    { "Hammarby hamn",             17, 3, 0.80f,0.45f,0.50f,0.35f,0.70f,0.40f,0.60f,0.05f, 97, 0.50f,0.60f },
+    // RUMÄNSK: långt, hypnotiskt, tålamod (Rhadoo, Raresh, Petre Inspirescu)
+    { "Bukarest soluppgång",       18, 0, 0.50f,0.35f,0.20f,0.40f,0.15f,0.95f,0.10f,0.30f, 7,  0.90f,0.20f },
+    { "Tålamod",                   18, 0, 0.45f,0.25f,0.15f,0.50f,0.10f,0.90f,0.00f,0.20f, 71, 0.95f,0.15f },
+    { "Mikrogung",                 18, 4, 0.55f,0.45f,0.25f,0.40f,0.25f,0.85f,0.10f,0.35f, 108,0.85f,0.25f },
+    // PERLON: mikroförändringar, filter och dub (Villalobos, Zip)
+    { "Frankfurt efterfest",       19, 0, 0.50f,0.60f,0.40f,0.40f,0.35f,0.85f,0.20f,0.50f, 69, 0.80f,0.25f },
+    { "Glapp i gunget",            19, 0, 0.55f,0.70f,0.35f,0.35f,0.45f,0.80f,0.30f,0.45f, 113,0.75f,0.30f },
+    { "Perlonsnöre",               19, 4, 0.45f,0.55f,0.45f,0.50f,0.30f,0.90f,0.20f,0.60f, 35, 0.85f,0.20f },
+    // KANAL: dubtechno, ekon i stället för drop (Basic Channel, Chain Reaction)
+    { "Kedjereaktion",             20, 0, 0.45f,0.30f,0.50f,0.60f,0.05f,0.85f,0.20f,1.00f, 4,  0.90f,0.25f },
+    { "Dubkanalen",                20, 0, 0.40f,0.40f,0.60f,0.60f,0.05f,0.90f,0.30f,0.95f, 8,  0.90f,0.20f },
+    { "Källaren på Hardwax",       20, 3, 0.50f,0.35f,0.55f,0.50f,0.10f,0.80f,0.20f,0.90f, 93, 0.85f,0.30f },
+    // MÖRKER: spänning, muller, stora drop (Dubfire, SCI+TEC)
+    { "Mörkrets tryck",            21, 0, 0.80f,0.45f,0.80f,0.85f,0.45f,0.75f,0.80f,0.25f, 21, 0.70f,0.65f },
+    { "Muller i tunneln",          21, 0, 0.75f,0.40f,0.85f,0.90f,0.40f,0.80f,0.70f,0.30f, 77, 0.75f,0.60f },
+    { "Revben",                    21, 3, 0.85f,0.50f,0.75f,0.80f,0.50f,0.70f,0.90f,0.20f, 2007,0.65f,0.70f },
 };
 inline constexpr int kAntal = (int) (sizeof (kFabrik) / sizeof (kFabrik[0]));
 } // namespace presets

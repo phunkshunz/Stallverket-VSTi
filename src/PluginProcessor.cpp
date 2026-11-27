@@ -59,8 +59,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout StallverketProcessor::skapaP
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { "kanal", 1 }, "Kanal", kanaler, 0));
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { "roll", 1 }, "Roll", rollLista(), kRollAuto));
 
-    StringArray mallar; for (const auto& m : motor::kMallar) mallar.add (String::fromUTF8 (m.namn));
+    StringArray mallar;
+    for (int i = 0; i < motor::kAntalGamlaMallar; ++i) mallar.add (String::fromUTF8 (motor::kMallar[i].namn));
     mallar.add ("EGEN");
+    for (int i = motor::kAntalGamlaMallar; i < motor::kAntalMallar; ++i) mallar.add (String::fromUTF8 (motor::kMallar[i].namn));
     p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { "mall", 1 }, "Mall", mallar, 0));
     p.push_back (std::make_unique<AudioParameterInt> (ParameterID { "fro", 1 }, String::fromUTF8 ("Frö"), 1, 9999, 1));
     StringArray former; for (auto* f : motor::kFormNamn) former.add (f);
@@ -213,7 +215,7 @@ void StallverketProcessor::lasInstallning (float* ut) const
 motor::Installning StallverketProcessor::fran (const float* v) const
 {
     motor::Installning in;
-    in.mall      = juce::jlimit (0, motor::kAntalMallar, (int) std::lround (v[0]));
+    in.mall      = motor::mallFranMeny (juce::jlimit (0, motor::kAntalMallar, (int) std::lround (v[0])));
     in.fro       = (uint32_t) juce::jmax (1, (int) std::lround (v[1]));
     in.form      = juce::jlimit (0, motor::kAntalFormer - 1, (int) std::lround (v[2]));
     in.energi    = v[3]; in.variation = v[4]; in.brytDjup = v[5]; in.byggLangd = v[6];
@@ -398,7 +400,7 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     }
     spelade = play;
 
-    slag.store (ppq); spelar.store (play); spt.store (slagPerTakt);
+    slag.store (ppq); spelar.store (play); spt.store (slagPerTakt); bpmNu.store (bpm);
     if (central) nav.slag.store (ppq);
 
     // ---- inställningar och plan
@@ -664,7 +666,7 @@ void StallverketProcessor::slumpaFro()
 void StallverketProcessor::slumpaAllt()
 {
     auto& rnd = juce::Random::getSystemRandom();
-    satt ("mall", (float) rnd.nextInt (motor::kAntalMallar));
+    satt ("mall", (float) motor::menyFranMall (rnd.nextInt (motor::kAntalMallar)));
     slumpaFro();
     for (auto* id : { "energi", "variation", "brytdjup", "bygglangd", "stok", "filter", "andas", "dub" })
         satt (id, 0.1f + 0.8f * rnd.nextFloat());
@@ -684,7 +686,7 @@ void StallverketProcessor::laddaFabrik (int i)
 {
     if (! juce::isPositiveAndBelow (i, presets::kAntal)) return;
     const auto& f = presets::kFabrik[i];
-    satt ("mall", (float) f.mall); satt ("form", (float) f.form); satt ("fro", (float) f.fro);
+    satt ("mall", (float) motor::menyFranMall (f.mall)); satt ("form", (float) f.form); satt ("fro", (float) f.fro);
     satt ("energi", f.energi); satt ("variation", f.variation); satt ("brytdjup", f.brytDjup);
     satt ("bygglangd", f.byggLangd); satt ("stok", f.stok); satt ("filter", f.filter);
     satt ("andas", f.andas); satt ("dub", f.dub);
@@ -858,8 +860,62 @@ void StallverketProcessor::laddaKassett()
     });
 }
 
+// Läser låten i bakgrunden (mono, nedsamplad) och gör kurva och skrift av den, i DAW:ens tempo.
+void StallverketProcessor::lasReferens (const juce::File& fil)
+{
+    if (! fil.existsAsFile()) return;
+    { const juce::ScopedLock l (refLas); refText = sprak::trU ("LÄSER ") + fil.getFileName() + " ..."; }
+    const double bpm = bpmNu.load();
+    kassettTrad.addJob ([this, fil, bpm]
+    {
+        juce::AudioFormatManager format;
+        format.registerBasicFormats();
+        std::unique_ptr<juce::AudioFormatReader> r (format.createReaderFor (fil));
+        if (r == nullptr) { const juce::ScopedLock l (refLas); refText = sprak::trU ("KAN INTE LÄSA FILEN"); return; }
+        // ungefär 11 kHz räcker för energi per takt
+        const int steg = juce::jmax (1, (int) (r->sampleRate / 11025.0));
+        const juce::int64 len = juce::jmin<juce::int64> (r->lengthInSamples, (juce::int64) (r->sampleRate * 60.0 * 20.0));
+        std::vector<float> mono;
+        mono.reserve ((size_t) (len / steg + 1));
+        juce::AudioBuffer<float> b ((int) juce::jmin (2u, r->numChannels), 1 << 16);
+        for (juce::int64 pos = 0; pos < len; pos += b.getNumSamples())
+        {
+            const int n = (int) juce::jmin<juce::int64> (b.getNumSamples(), len - pos);
+            r->read (&b, 0, n, pos, true, true);
+            for (int i = 0; i + steg <= n; i += steg)
+            {
+                float sum = 0;
+                for (int k = 0; k < steg; ++k)
+                    for (int c = 0; c < b.getNumChannels(); ++c) sum += b.getSample (c, i + k);
+                mono.push_back (sum / (float) (steg * b.getNumChannels()));
+            }
+        }
+        auto res = std::make_unique<referens::Resultat> (referens::analysera (mono, r->sampleRate / steg, bpm));
+        const juce::ScopedLock l (refLas);
+        if (! res->ok) { refText = sprak::trU ("FÖR KORT LÅT"); return; }
+        refText = fil.getFileNameWithoutExtension() + ": " + juce::String (res->takter) + sprak::trU (" takter i ")
+                + juce::String (juce::roundToInt (bpm)) + " BPM  ·  " + juce::String (res->skrift);
+        refKlar = std::move (res);
+    });
+}
+
 void StallverketProcessor::timerCallback()
 {
+    // referensläsaren är klar: lägg in kurvan och skriften (här, på meddelandetråden)
+    {
+        std::unique_ptr<referens::Resultat> res;
+        { const juce::ScopedLock l (refLas); res = std::move (refKlar); }
+        if (res != nullptr)
+        {
+            for (int i = 0; i < 8; ++i) satt ("k" + juce::String (i + 1), res->kurva[i]);
+            const int alt[] = { 128, 256, 512, 1024, 2048 };
+            for (int i = 0; i < 5; ++i) if (alt[i] == res->kurvTakter) satt ("kurvalangd", (float) i);
+            satt ("kurva", 1.0f);
+            sattSkrift (juce::String (res->skrift));
+            satt ("mall", (float) motor::menyFranMall (14));   // SKRIFTEN
+            aktivtPresetNamn = sprak::trU ("Referens");
+        }
+    }
     if (las ("kassett") > 0.5f)
     {
         laddaKassett();
@@ -934,7 +990,7 @@ void StallverketProcessor::kopieraMallTillEgen()
     }
     const float q[] = { m.pLyft, m.pBreak, m.pByggDirekt, m.pDropDirekt, m.pKlimax, m.pUtandning, m.hard, m.stok, m.dub, m.filter, m.atmoForst ? 1.0f : 0.0f };
     for (int i = 0; i < 11; ++i) satt (kInstId[kIEgen + motor::NUM_DEL + i], q[i]);
-    satt ("mall", (float) motor::kAntalMallar);
+    satt ("mall", (float) motor::menyFranMall (motor::kAntalMallar));
 }
 
 juce::File StallverketProcessor::mallMapp() const { return presetMapp().getParentDirectory().getChildFile ("Mallar"); }
@@ -963,7 +1019,7 @@ bool StallverketProcessor::laddaMall (const juce::File& f)
     if (x == nullptr || ! x->hasTagName ("STALLVERKET_MALL")) return false;
     for (int i = kIEgen; i < kAntalInst; ++i)
         if (x->hasAttribute (kInstId[i])) satt (kInstId[i], (float) x->getDoubleAttribute (kInstId[i]));
-    satt ("mall", (float) motor::kAntalMallar);
+    satt ("mall", (float) motor::menyFranMall (motor::kAntalMallar));
     return true;
 }
 

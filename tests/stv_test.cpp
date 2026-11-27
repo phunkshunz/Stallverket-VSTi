@@ -77,6 +77,46 @@ int main (int argc, char** argv)
         for (auto& f : mapp.findChildFiles (juce::File::findFiles, true, "*.wav"))
             std::printf ("REC: %s  %lld byte\n", f.getFileName().toRawUTF8(), (long long) f.getSize());
     }
+    // REFERENSLÄSAREN: en syntad låt (intro, groove, break, bygg, drop, outro) i 130 BPM som WAV
+    {
+        const double rsr = 22050.0, bpm = 130.0, sps = bpm / 60.0 / rsr;
+        const int form[][2] = { { 0, 16 }, { 1, 32 }, { 2, 16 }, { 3, 8 }, { 4, 32 }, { 5, 16 } };
+        juce::File wavFil ("/tmp/stv_referens.wav"); wavFil.deleteFile();
+        std::unique_ptr<juce::OutputStream> os (wavFil.createOutputStream());
+        juce::WavAudioFormat wf;
+        std::unique_ptr<juce::AudioFormatWriter> w (wf.createWriterFor (os.get(), rsr, 1, 16, {}, 0));
+        os.release();
+        juce::Random rr (3);
+        double sl = 0;
+        juce::AudioBuffer<float> rb (1, 4096);
+        for (auto& d : form)
+        {
+            const int n = (int) (d[1] * 4 / sps);
+            for (int i0 = 0; i0 < n; i0 += 4096)
+            {
+                const int m2 = juce::jmin (4096, n - i0);
+                for (int i = 0; i < m2; ++i, sl += sps)
+                {
+                    const double t = (sl - std::floor (sl)) * 60.0 / bpm, s8 = std::fmod (sl * 2, 1.0) * 30.0 / bpm;
+                    const float kick = (float) (std::sin (6.2832 * 50 * t) * std::exp (-t * 8));
+                    const float bas = (float) (std::sin (6.2832 * 55 * std::fmod (sl + 0.5, 1.0) * 60 / bpm) * 0.5);
+                    const float hat = (rr.nextFloat() * 2 - 1) * (float) std::exp (-s8 * 60) * 0.15f;
+                    const float pad = (float) (std::sin (6.2832 * 440 * sl * 60 / bpm) * 0.12);
+                    const float upp = (float) (i0 + i) / n;
+                    float x = d[0] == 0 ? hat : d[0] == 1 ? kick * 0.8f + bas + hat : d[0] == 2 ? pad : d[0] == 3 ? pad + hat * 2 * upp
+                            : d[0] == 4 ? kick + bas * 1.2f + hat * 1.5f + pad : hat * 0.8f;
+                    rb.setSample (0, i, x * 0.5f);
+                }
+                w->writeFromAudioSampleBuffer (rb, 0, m2);
+            }
+        }
+        w.reset();
+        a.lasReferens (wavFil);
+        for (int i = 0; i < 200 && ! a.referensStatus().contains ("BPM"); ++i) juce::MessageManager::getInstance()->runDispatchLoopUntil (30);
+        juce::MessageManager::getInstance()->runDispatchLoopUntil (200);
+        std::printf ("referens: %s\n  mall nu: %s  skrift: %s\n", a.referensStatus().toRawUTF8(),
+                     motor::kMallar[a.installning().mall].namn, a.skrift().toRawUTF8());
+    }
     a.taOver (motor::BYGG);
     const auto mid = a.exporteraMidi();
     std::printf ("MIDI-export: %s (%lld byte)\n", mid.getFileName().toRawUTF8(), (long long) mid.getSize());

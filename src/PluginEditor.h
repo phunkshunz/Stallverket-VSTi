@@ -32,7 +32,7 @@ private:
     void dragKurva (juce::Point<int>);
     void fyllMallar();
     void namnDialog (const juce::String& rubrik, std::function<void (const juce::String&)> klar);
-    juce::Rectangle<int> kurvYta;
+    juce::Rectangle<int> kurvYta, refYta;
     int vy = 0, dragPunkt = -1;
 
     StallverketProcessor& proc;
@@ -67,6 +67,7 @@ private:
     // kurva
     juce::TextButton kurvaPa { "KURVA PÅ" };
     juce::ComboBox kurvLangd;
+    juce::TextButton refKnapp;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> kurvaPaAtt;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> kurvLangdAtt;
     // mallredigerare

@@ -25,6 +25,8 @@ jobs:
           ./kassett_test
           c++ -std=c++17 -O2 -Isrc tests/glitch_test.cpp -o glitch_test
           ./glitch_test
+          c++ -std=c++17 -O2 -Isrc tests/referens_test.cpp -o referens_test
+          ./referens_test
 
       - name: Konfigurera
         run: >
