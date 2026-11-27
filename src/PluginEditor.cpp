@@ -83,7 +83,7 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     slumpaAllt.setTooltip (utf8 ("Slumpar mall, frö och alla rattar."));
 
     recKnapp.onClick = [this] { proc.vaxlaRec(); };
-    recKnapp.setTooltip (utf8 ("Spelar in varje kanal som en egen WAV på skrivbordet (mappen STÄLLVERKET inspelningar). Börjar och slutar på hel takt. Lägg CENTRAL på mastern med ROLL = ORÖRD för hela mixen."));
+    recKnapp.setTooltip (utf8 ("Spelar in varje kanal som en egen WAV på skrivbordet (mappen STÄLLVERKET inspelningar). Börjar och slutar på hel takt. När du stoppar läggs alla kanaler också ihop till 00 HELA LÅTEN.wav i samma mapp."));
     recKnapp.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xffe0412f));
     breakNu.onClick = [this] { proc.taOver (motor::BREAK); };
     byggNu.onClick  = [this] { proc.taOver (motor::BYGG); };
@@ -935,6 +935,7 @@ void StallverketEditor::timerCallback()
             t = proc.skriverNu() ? juce::String::fromUTF8 ("● REC ") + juce::String (sek / 60) + ":" + juce::String (sek % 60).paddedLeft ('0', 2)
                                  : sprak::trU ("REC: VÄNTAR PÅ TAKT");
         }
+        if (! rec && proc.recStatus().isNotEmpty()) t = proc.recStatus();
         if (recKnapp.getButtonText() != t) recKnapp.setButtonText (t);
     }
     const auto ov = ledning::nav().ovTyp.load();

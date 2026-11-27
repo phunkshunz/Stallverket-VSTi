@@ -86,7 +86,8 @@ int main (int argc, char** argv)
     prov.reset();
     std::printf ("kassett: max %.3f  rms %.4f\n", kassettMax, std::sqrt (kassettE / (48000.0 * 180)));
     std::printf ("NaN: %lld  max: %.3f  följer b mall=%d  MIDI-händelser: %lld\n", (long long) nan, maxv, b.installning().mall, (long long) midiN);
-    juce::MessageManager::getInstance()->runDispatchLoopUntil (300);
+    for (int i = 0; i < 15; ++i) juce::MessageManager::getInstance()->runDispatchLoopUntil (200);   // HELA LÅTEN mixas i bakgrunden
+    std::printf ("rec-status: %s\n", a.recStatus().toRawUTF8());
     {
         auto mapp = juce::File::getSpecialLocation (juce::File::userDesktopDirectory).getChildFile (juce::String::fromUTF8 ("STÄLLVERKET inspelningar"));
         for (auto& f : mapp.findChildFiles (juce::File::findFiles, true, "*.wav"))

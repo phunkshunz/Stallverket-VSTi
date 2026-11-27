@@ -84,6 +84,7 @@ public:
     bool skriverNu() const { return skriver.load(); }
     double recSekunder() const;
     juce::File recMapp (int64_t id) const;
+    juce::String recStatus() const { const juce::ScopedLock l (kassettLas); return recText; }
 
     // ---- presets
     int  antalFabrik() const;
@@ -133,6 +134,8 @@ private:
     int kassettKitLaddat = -1;
     juce::String kassettMappLaddad;
     void laddaKassett();
+    void mixaHelaLaten (int64_t id);
+    juce::String recText;
     juce::CriticalSection refLas;
     juce::String refText;
     std::unique_ptr<referens::Resultat> refKlar;   // läses av timern och läggs in i parametrarna

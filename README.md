@@ -85,7 +85,7 @@ Gör en STÄLLVERKET-kanal till en BETONG. Lägg STÄLLVERKET på ett tomt spår
 
 ## REC
 
-**REC** på CENTRAL spelar in varje kanal som en egen WAV-fil (24 bit) i `Skrivbord/STÄLLVERKET inspelningar/<datum och tid>/`, till exempel `01 KICK.wav`, `02 BAS.wav`. Alla börjar och slutar på samma hela takt, så filerna ligger exakt i linje när du drar in dem i en DAW. Trycker du REC när transporten står börjar inspelningen när du trycker play. Vill du ha hela mixen i en fil: lägg CENTRAL på mastern med ROLL = ORÖRD, då blir den `MIX (CENTRAL).wav`.
+**REC** på CENTRAL spelar in varje kanal som en egen WAV-fil (24 bit) i `Skrivbord/STÄLLVERKET inspelningar/<datum och tid>/`, till exempel `01 KICK.wav`, `02 BAS.wav`. Alla börjar och slutar på samma hela takt, så filerna ligger exakt i linje när du drar in dem i en DAW. Trycker du REC när transporten står börjar inspelningen när du trycker play. När du stoppar lägger CENTRAL ihop alla kanalerna till **`00 HELA LÅTEN.wav`** i samma mapp (24 bit, toppen högst -1 dB, inget klipps). Det som ligger efter STÄLLVERKET i kanalerna eller på mastern kommer inte med; vill du ha exakt masterljudet, lägg CENTRAL sist på mastern med ROLL = ORÖRD, då blir den `MIX (CENTRAL).wav`.
 
 ## Licens
 

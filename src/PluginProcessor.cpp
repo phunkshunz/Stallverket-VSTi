@@ -899,6 +899,66 @@ void StallverketProcessor::lasReferens (const juce::File& fil)
     });
 }
 
+// HELA LÅTEN: när inspelningen är klar lägger CENTRAL ihop alla kanalers WAV-filer till en.
+// De börjar och slutar på samma takt, så de ligger exakt i linje. Blir summan för stark
+// sänks hela filen så att toppen hamnar på -1 dB (inget klipps).
+void StallverketProcessor::mixaHelaLaten (int64_t id)
+{
+    const auto mapp = recMapp (id);
+    { const juce::ScopedLock l (kassettLas); recText = sprak::trU ("SPARAR HELA LÅTEN ..."); }
+    kassettTrad.addJob ([this, mapp]
+    {
+        juce::Thread::sleep (1500);   // låt alla kanaler stänga sina filer först
+        juce::AudioFormatManager format;
+        format.registerBasicFormats();
+        juce::OwnedArray<juce::AudioFormatReader> lasare;
+        for (auto& f : mapp.findChildFiles (juce::File::findFiles, false, "*.wav"))
+            if (! f.getFileName().startsWith ("00 ") && ! f.getFileName().startsWith ("MIX"))   // MIX = mastern, redan hela mixen
+                if (auto* r = format.createReaderFor (f)) lasare.add (r);
+        if (lasare.size() < 2) { const juce::ScopedLock l (kassettLas); recText = {}; return; }
+        juce::int64 len = 0;
+        double fsr = lasare[0]->sampleRate;
+        for (auto* r : lasare) len = juce::jmax (len, r->lengthInSamples);
+        const int blk = 1 << 15;
+        juce::AudioBuffer<float> sum (2, blk), en (2, blk);
+        auto blanda = [&] (juce::int64 pos, int n)
+        {
+            sum.clear();
+            for (auto* r : lasare)
+            {
+                en.clear();
+                r->read (&en, 0, n, pos, true, true);
+                for (int c = 0; c < 2; ++c) sum.addFrom (c, 0, en, c, 0, n);
+            }
+        };
+        float topp = 0.0f;
+        for (juce::int64 pos = 0; pos < len; pos += blk)
+        {
+            const int n = (int) juce::jmin<juce::int64> (blk, len - pos);
+            blanda (pos, n);
+            topp = juce::jmax (topp, sum.getMagnitude (0, n));
+        }
+        const float gain = topp > 0.891f ? 0.891f / topp : 1.0f;   // -1 dB
+        auto fil = mapp.getChildFile (juce::String::fromUTF8 ("00 HELA LÅTEN.wav"));
+        fil.deleteFile();
+        std::unique_ptr<juce::OutputStream> ut (fil.createOutputStream());
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::AudioFormatWriter> w (ut != nullptr ? wav.createWriterFor (ut.get(), fsr, 2, 24, {}, 0) : nullptr);
+        if (w == nullptr) { const juce::ScopedLock l (kassettLas); recText = sprak::trU ("KUNDE INTE SPARA HELA LÅTEN"); return; }
+        ut.release();
+        for (juce::int64 pos = 0; pos < len; pos += blk)
+        {
+            const int n = (int) juce::jmin<juce::int64> (blk, len - pos);
+            blanda (pos, n);
+            sum.applyGain (0, n, gain);
+            w->writeFromAudioSampleBuffer (sum, 0, n);
+        }
+        w.reset();
+        const juce::ScopedLock l (kassettLas);
+        recText = sprak::trU ("HELA LÅTEN SPARAD: ") + juce::String (lasare.size()) + sprak::trU (" kanaler");
+    });
+}
+
 void StallverketProcessor::timerCallback()
 {
     // referensläsaren är klar: lägg in kurvan och skriften (här, på meddelandetråden)
@@ -957,13 +1017,13 @@ void StallverketProcessor::timerCallback()
     {
         stangRec();
         // CENTRAL nollställer när den själv är klar, så att REC-knappen släcks
-        if (arCentral() && id != 0 && recKlar.load()) n.recId.store (0);
+        if (arCentral() && id != 0 && recKlar.load()) { n.recId.store (0); mixaHelaLaten (id); }
     }
     // står transporten när stopp trycks: stäng direkt
     if (oppenRecId != 0 && n.recStopp.load() < -1.0e17)
     {
         stangRec();
-        if (arCentral()) n.recId.store (0);
+        if (arCentral()) { const auto gammal = n.recId.load(); n.recId.store (0); if (gammal != 0) mixaHelaLaten (gammal); }
     }
 }
 
