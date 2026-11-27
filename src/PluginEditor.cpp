@@ -1,11 +1,12 @@
 #include "PluginEditor.h"
 #include "Presets.h"
+#include "Glitch.h"
 
 namespace
 {
 constexpr int kCentralB = 920, kCentralH = 640;
 constexpr int kTidH = 380;
-constexpr int kKanalB = 540, kKanalH = 330;
+constexpr int kKanalB = 540, kKanalH = 362;
 
 juce::Colour delFarg (int d)
 {
@@ -234,13 +235,47 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     for (auto* c : std::initializer_list<juce::Component*> { &kassettKnapp, &kassettKit, &kassettMonster, &kassettLek, &kassettMappKnapp })
         addChildComponent (c);
 
+    // ---- GLITCH
+    {
+        const char* gid[] = { "g_repeat", "g_bak", "g_tape", "g_gate", "g_kross", "g_ton", "g_eko", "g_svep" };
+        const char* kort[] = { "REPEAT", "BAK", "TAPE", "GATE", "KROSS", "TON", "EKO", "SVEP" };
+        const char* tips[] = { "Upprepar biten som just spelats, allt tätare: 1/8, 1/16, 1/32 (Stutter Edit).",
+                               "Spelar senaste slaget baklänges.",
+                               "Bandet bromsar in och stannar.",
+                               "Trance-gate: varannan sextondel tyst, tätare mot slutet.",
+                               "Bitkross och lägre samplingsfrekvens.",
+                               "Repeat en oktav ner eller upp, eller stigande i uppbyggnaden.",
+                               "Kanalen kastas in i ett eko som skallrar vidare när den tystnar.",
+                               "Resonant filtersvep som går allt snabbare." };
+        for (int i = 0; i < 8; ++i)
+        {
+            glitchKnapp[i].setButtonText (kort[i]);
+            glitchKnapp[i].setClickingTogglesState (true);
+            glitchKnapp[i].setTooltip (utf8 (tips[i]));
+            glitchAtt[i] = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.state, gid[i], glitchKnapp[i]);
+            addChildComponent (glitchKnapp[i]);
+        }
+        for (auto* sl : { &glitchMangd, &glitchCentral })
+        {
+            sl->setSliderStyle (juce::Slider::LinearBar);
+            sl->setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+            sl->setColour (juce::Slider::trackColourId, ArmColours::sodiumDk);
+            addChildComponent (*sl);
+        }
+        glitchMangdAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.state, "g_mangd", glitchMangd);
+        glitchCentralAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.state, "glitch", glitchCentral);
+        glitchMangd.setTooltip (utf8 ("GLITCH på den här kanalen: hur ofta motorn kastar in effekterna du tänt. Gånger GLITCH på CENTRAL."));
+        glitchCentral.setTooltip (utf8 ("GLITCH på alla kanaler. Varje kanal väljer sina effekter och sin mängd i kanalvyn."));
+        glitchCentral.onValueChange = [this] { repaint (tidYta); };
+    }
+
     // ---- trick
     const char* trickId[] = { "t_frys", "t_halvtid", "t_bak", "t_vinyl", "t_radio", "t_eko", "t_tomrum",
                               "t_stam", "t_glapp", "t_byt", "t_spoke", "t_stopp",
-                              "t_fas", "t_dubkedja", "t_bage", "t_bassvep", "t_kickpaus" };
+                              "t_fas", "t_dubkedja", "t_bage", "t_bassvep", "t_kickpaus", "t_muller", "t_basdyk" };
     const char* trickText[] = { "FRYS", "HALVTID", "BAKLÄNGES", "VINYLBROMS", "RADIOBYTE", "KORT EKO", "TOMRUM",
                                 "STAMNING", "BANDGLAPP", "KANALBYTE", "SPÖKEKO", "STOPP-SLAG",
-                                "FASFÖRSKJUTNING", "DUBKEDJA", "FILTERBÅGE", "BASSVEP", "KICKPAUS" };
+                                "FASFÖRSKJUTNING", "DUBKEDJA", "FILTERBÅGE", "BASSVEP", "KICKPAUS", "MULLER", "BASDYK" };
     const char* trickTips[] = {
         "Sista biten innan breaket fryses och ringer vidare medan allt annat tystnar.",
         "Breaket spelar i halv hastighet, tungt och segt.",
@@ -258,7 +293,9 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
         "I breaket matar ekot sig självt allt mer, nästan rundgång, och klipps tvärt i droppet.",
         "En kanal får en långsam filterbåge genom delen: stängd, öppen i mitten, stängd igen.",
         "Basen börjar stängd och sveper upp under droppets första takt.",
-        "Kicken andas ut de två sista slagen i en 16-taktsfras." };
+        "Kicken andas ut de två sista slagen i en 16-taktsfras.",
+        "Första halvan av uppbyggnaden blir kicken dov och mullrande, som genom en vägg, och klarnar mot droppet.",
+        "Basen lyfts ur med högpass sista slaget i en fras och smäller tillbaka på ettan, som en DJ med bas-EQ:n." };
     for (int i = 0; i < motor::kAntalTrick; ++i)
     {
         trickKnapp[i].setButtonText (utf8 (trickText[i]));
@@ -388,8 +425,9 @@ void StallverketEditor::byggLayout()
         c->setVisible (centralVy);
     for (auto* c : std::initializer_list<juce::Component*> { &centralKnapp, &kanalVal, &rollVal, &sprakKnapp }) c->setVisible (true);
     delaKnapp.setVisible (! centralVy);
-    for (auto* c : std::initializer_list<juce::Component*> { &kassettKnapp, &kassettKit, &kassettMonster, &kassettLek, &kassettMappKnapp })
+    for (auto* c : std::initializer_list<juce::Component*> { &kassettKnapp, &kassettKit, &kassettMonster, &kassettLek, &kassettMappKnapp, &glitchMangd })
         c->setVisible (! centralVy);
+    for (auto& b : glitchKnapp) b.setVisible (! centralVy);
     for (auto& c : delVal) c.setVisible (! centralVy);
     for (auto* c : { &flikLat, &flikKurva, &flikMall, &flikTrick, &exportKnapp }) c->setVisible (centralVy);
     visaVy (vy);
@@ -453,6 +491,15 @@ void StallverketEditor::resized()
         auto inre = r.reduced (12, 10);
         auto rad = inre.removeFromBottom (24);
         inre.removeFromBottom (6);
+        auto gRad = inre.removeFromBottom (24);
+        inre.removeFromBottom (6);
+        glitchYta = gRad;
+        glitchMangd.setBounds (gRad.removeFromRight (64).reduced (0, 5));
+        gRad.removeFromRight (50);   // texten GLITCH
+        {
+            const int gb = gRad.getWidth() / 8;
+            for (int i = 0; i < 8; ++i) glitchKnapp[i].setBounds (gRad.removeFromLeft (gb).reduced (2, 1));
+        }
         auto kRad = inre.removeFromBottom (24);
         kassettYta = kRad;
         kassettKnapp.setBounds (kRad.removeFromLeft (96));
@@ -487,6 +534,9 @@ void StallverketEditor::resized()
         auto ofta = tv.removeFromRight (190);
         trickRub[3] = ofta.removeFromTop (16);
         trickMangd.setBounds (ofta.removeFromTop (30).reduced (0, 4));
+        ofta.removeFromTop (70);
+        trickRub[4] = ofta.removeFromTop (16);
+        glitchCentral.setBounds (ofta.removeFromTop (30).reduced (0, 4));
         tv.removeFromRight (16);
         const int sp = (tv.getWidth() - 24) / 3;
         auto c1 = tv.removeFromLeft (sp); tv.removeFromLeft (12);
@@ -497,9 +547,9 @@ void StallverketEditor::resized()
         // BREAK: frys, halvtid, baklänges, tomrum, radio, dubkedja
         for (int i : { 0, 1, 2, 6, 4, 13 }) { trickKnapp[i].setBounds (c1.removeFromTop (bh).reduced (0, 2)); }
         // ÖVERGÅNG: vinyl, eko, bassvep
-        for (int i : { 3, 5, 15 }) { trickKnapp[i].setBounds (c2.removeFromTop (bh).reduced (0, 2)); }
+        for (int i : { 3, 5, 15, 17 }) { trickKnapp[i].setBounds (c2.removeFromTop (bh).reduced (0, 2)); }
         // GROOVE
-        for (int i : { 7, 8, 9, 10, 11, 12, 14, 16 }) { trickKnapp[i].setBounds (c3.removeFromTop (bh).reduced (0, 2)); }
+        for (int i : { 7, 8, 9, 10, 11, 12, 14, 16, 18 }) { trickKnapp[i].setBounds (c3.removeFromTop (bh).reduced (0, 2)); }
 
         // kurva
         auto kv = tidYta.reduced (8).withTrimmedTop (26);
@@ -727,7 +777,10 @@ void StallverketEditor::ritaKanalvy (juce::Graphics& g, juce::Rectangle<int> yta
 {
     using namespace ArmColours;
     drawPanel (g, yta, "", {});
-    auto r = yta.reduced (12, 10).withTrimmedBottom (62);
+    auto r = yta.reduced (12, 10).withTrimmedBottom (92);
+    g.setColour (muted);
+    g.setFont (juce::FontOptions (9.0f, juce::Font::bold));
+    g.drawText ("GLITCH", glitchMangd.getBounds().withX (glitchMangd.getX() - 50).withWidth (46), juce::Justification::centredRight);
 
     // BETONG-KASSETT: LEK-texten och status (hur många ljud som hittades)
     {
@@ -890,6 +943,7 @@ void StallverketEditor::visaVy (int v)
     for (auto* b : std::initializer_list<juce::Component*> { &atmoForst, &kopieraMall, &sparaMall, &laddaMall }) b->setVisible (c && vy == 2);
     for (auto& b : trickKnapp) b.setVisible (c && vy == 3);
     trickMangd.setVisible (c && vy == 3);
+    glitchCentral.setVisible (c && vy == 3);
     skriftFalt.setVisible (c && vy == 3);
     (vy == 0 ? flikLat : vy == 1 ? flikKurva : vy == 2 ? flikMall : flikTrick).setToggleState (true, juce::dontSendNotification);
     repaint();
@@ -974,9 +1028,13 @@ void StallverketEditor::ritaTrick (juce::Graphics& g)
     for (int i = 0; i < 4; ++i) { g.setColour (sodium); g.drawText (rub[i], trickRub[i], juce::Justification::centredLeft); }
     g.setColour (sodium);
     g.drawText (juce::String (juce::roundToInt (trickMangd.getValue() * 100.0)) + " %", trickRub[3], juce::Justification::centredRight);
+    g.setColour (sodium);
+    g.drawText ("GLITCH", trickRub[4], juce::Justification::centredLeft);
+    g.drawText (juce::String (juce::roundToInt (glitchCentral.getValue() * 100.0)) + " %", trickRub[4], juce::Justification::centredRight);
     g.setColour (muted);
     g.setFont (juce::FontOptions (9.5f));
-    auto info = trickRub[3].translated (0, 52).withHeight (60);
+    g.drawFittedText (sprak::trU ("Glitch-effekter på alla kanaler. Välj effekter per kanal i kanalvyn."), trickRub[4].translated (0, 46).withHeight (36), juce::Justification::topLeft, 3);
+    auto info = trickRub[3].translated (0, 50).withHeight (36);
     g.drawFittedText (sprak::trU ("Ett trick per break och per uppbyggnad, och ibland ett i groovet. Tänd = får hända."), info, juce::Justification::topLeft, 4);
 
     g.setFont (juce::FontOptions (10.0f, juce::Font::bold));

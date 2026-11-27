@@ -62,7 +62,7 @@ private:
     juce::Slider trickMangd;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> trickMangdAtt;
     juce::TextEditor skriftFalt;
-    juce::Rectangle<int> trickRub[4], skriftYta;
+    juce::Rectangle<int> trickRub[5], skriftYta;
     void ritaTrick (juce::Graphics&);
     // kurva
     juce::TextButton kurvaPa { "KURVA PÅ" };
@@ -94,6 +94,12 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> kassettKitAtt, kassettMonsterAtt;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> kassettLekAtt;
     juce::Rectangle<int> kassettYta;
+    // GLITCH i kanalvyn
+    juce::TextButton glitchKnapp[8];
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> glitchAtt[8];
+    juce::Slider glitchMangd, glitchCentral;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> glitchMangdAtt, glitchCentralAtt;
+    juce::Rectangle<int> glitchYta;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> centralAtt;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> kanalAtt, rollAtt, mallAtt, formAtt;

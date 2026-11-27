@@ -134,6 +134,7 @@ public:
         const float gTid = 1.0f - std::exp (-1.0f / (0.004f * sr));   // 4 ms
         const float gMjuk = 1.0f - std::exp (-1.0f / (0.030f * sr));  // 30 ms
         const float fTid = 1.0f - std::exp (-1.0f / (0.025f * sr));
+        const float fSnabb = 1.0f - std::exp (-1.0f / (0.003f * sr));
         const double sampelPerSlag = slagPerSampel > 0 ? 1.0 / slagPerSampel : (double) sr * 0.5;
 
         const float gStang = 1.0f - std::exp (-1.0f / (0.012f * sr));  // 12 ms ut: inga avhuggna svansar
@@ -217,10 +218,11 @@ public:
                 if (malNiva < gain) k = std::min (k, gStang);
                 gain += k * (malNiva - gain);
             }
-            lpN  += fTid * (malLp - lpN);
-            hpN  += fTid * (malHp - hpN);
+            const float fK = (a.svep && d > 0.5f) ? fSnabb : fTid;   // GLITCH-svep: filtret följer snabbt
+            lpN  += fK * (malLp - lpN);
+            hpN  += fK * (malHp - hpN);
 
-            if ((raknare++ & 15) == 0)
+            if ((raknare++ & ((a.svep && d > 0.5f) ? 3u : 15u)) == 0)
             {
                 lp.satt (60.0f * std::pow (2.0f, lpN * 8.4f), sr, 0.8f);
                 hp.satt (20.0f * std::pow (2.0f, hpN * 7.0f), sr, 0.75f);
@@ -277,7 +279,9 @@ public:
                 {
                     const int fas = (int) ((slag - bitIndex * bit) * sampelPerSlag) % bitLen;
                     // ton > 1: biten spelas snabbare och upprepas inom sig själv, så den stiger i tonhöjd
-                    const double tonFas = std::fmod ((double) fas * std::max (1.0f, a.ton), (double) bitLen);
+                    // ton < 1: biten spelas långsammare (tonhopp ner) och hinner inte ta slut
+                    const double tonFas = a.ton < 1.0f ? (double) fas * a.ton
+                                                       : std::fmod ((double) fas * std::max (1.0f, a.ton), (double) bitLen);
                     // korta övertoningar i bitarnas kanter, så det inte klickar
                     const int kant = std::min (bitLen / 4, (int) (sr * 0.002f));
                     float env = 1.0f;
@@ -364,6 +368,20 @@ public:
             hp.kor (xL, 0, hpL);
             hp.kor (xR, 1, hpR);
             xL = hpL; xR = hpR;
+
+            // ---- KROSS (GLITCH): färre bitar och lägre samplingsfrekvens, mjukt in och ut
+            {
+                krossN += 0.002f * (((spelar && d > 0.5f) ? a.kross : 0.0f) - krossN);
+                if (krossN > 0.01f)
+                {
+                    const int hall = 1 + (int) (krossN * 15.0f);
+                    if (++krossRakn >= hall) { krossRakn = 0; krossL = xL; krossR = xR; }
+                    const float steg = std::pow (2.0f, 2.0f + (1.0f - krossN) * 10.0f);
+                    const float qL = std::round (krossL * steg) / steg, qR = std::round (krossR * steg) / steg;
+                    const float w = std::min (1.0f, krossN * 2.0f);
+                    xL += (qL - xL) * w; xR += (qR - xR) * w;
+                }
+            }
 
             // ---- TRYCK: mättnad som gör kanalen tätare och hårdare, men inte högre.
             // Nivån räknas tillbaka med en långsam RMS-jämförelse, så det låter fetare utan att lura örat med volym.
@@ -518,6 +536,8 @@ private:
     int ankare = 0, bakAnkare = 0, bakN = 0;
     unsigned raknare = 0;
     float topp = 0;
+    float krossN = 0.0f, krossL = 0.0f, krossR = 0.0f;
+    int krossRakn = 0;
     delare::Delare delaren;
     bool delaAktiv = false;
     float tryckRoll = 0.5f, tryckN = 0.0f, rmsIn = 0.0f, rmsUt = 0.0f, kompN = 1.0f, rmsK = 0.0001f;

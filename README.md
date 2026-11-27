@@ -40,13 +40,27 @@ CENTRAL behandlar också ljudet på sin egen kanal, så den kan ligga på t.ex. 
 
 - **TRICK**: roliga effekter som motorn kastar in själv. Tänd = får hända, **HUR OFTA** styr hur ofta.
   - *I breaket*: FRYS, HALVTID, BAKLÄNGES, TOMRUM, RADIOBYTE, DUBKEDJA (ekot matar sig självt mot rundgång och klipps tvärt i droppet)
-  - *In i droppet*: VINYLBROMS, KORT EKO, BASSVEP (basen sveper upp under droppets första takt)
-  - *I groovet*: STAMNING, BANDGLAPP, KANALBYTE, SPÖKEKO, STOPP-SLAG, FASFÖRSKJUTNING (en kanal glider en 1/16 var åttonde takt, som hos Reich), FILTERBÅGE (långsam filterbåge genom delen), KICKPAUS (kicken andas ut i 16-taktsfrasens slut)
+  - *In i droppet*: VINYLBROMS, KORT EKO, BASSVEP (basen sveper upp under droppets första takt), MULLER (kicken dov och mullrande första halvan av bygget, klarnar mot droppet)
+  - *I groovet*: STAMNING, BANDGLAPP, KANALBYTE, SPÖKEKO, STOPP-SLAG, FASFÖRSKJUTNING (en kanal glider en 1/16 var åttonde takt, som hos Reich), FILTERBÅGE (långsam filterbåge genom delen), KICKPAUS (kicken andas ut i 16-taktsfrasens slut), BASDYK (basen lyfts ur med högpass sista slaget i frasen och smäller tillbaka på ettan)
 - **Nya mallar**: SPEGEL (bygger upp och samma väg tillbaka), STAPLA (en kanal i taget, sedan ras), FALSKT DROP (uppbyggnad, sedan break, droppet efter), DUELL (fråga och svar mellan kanaler), TELEFON (allt i telefonlur tills droppet), SVÄRM (element tänds och släcks hela tiden), SKRIFTEN (följer texten du skriver under TRICK, t.ex. `I16 G32 B16 U8 D16 K32 O16`), PLASTIK (en perc-kanal står fast hela låten, kicken hålls borta länge och smäller sedan in, claps och rides kommer och går), HOOD (temat får spela länge, ett nytt element ungefär varannan minut, inget hoppar ur).
 
 - **KURVA**: rita energin över hela setet med åtta punkter (128 till 2048 takter, 512 takter är ungefär en timme i 130 BPM). Tänd **KURVA PÅ**, så ersätter kurvan ENERGI-ratten: lågt = fler breaks och färre element, högt = fler klimax.
 - **MALL**: bygg en egen mall. Längd per del, chanser (lyft, break, direkt bygg, direkt drop, klimax, utandning) och karaktär (hårda klipp, stök, dubkast, filter, atmo först). Välj **EGEN** i mallmenyn för att höra den. **KOPIERA MALL** tar mallen som spelar som startpunkt. Egna mallar sparas som `.stallmall` i `Dokument/Phunkshunz/STALLVERKET/Mallar`.
 - **SPARA MIDI**: sparar låten som MIDI-fil i `Dokument/Phunkshunz/STALLVERKET/Export` och visar den i Finder. Ett spår med delarna (markörer + noter C1 och uppåt) och ett spår per kanal med en not när kanalen spelar, plus nivå (CC 11), lågpass (CC 74) och högpass (CC 75). Dra in filen i Bitwig.
+
+## GLITCH
+
+Effekter i stil med Effectrix, Glitch, Stutter Edit och Looperator, som motorn kastar in själv på rätt ställen, så det låter som ett grepp och inte som ett fel:
+
+- **Frasslut**: sista ett eller två slagen i en 8-taktsfras får en gest.
+- **Uppbyggnad**: sista två takterna växer (repeat som tätnar och stiger, kross som ökar, filter som svänger allt snabbare).
+- **Groove**: ibland hackar ett enda 1/16-steg till, som en sekvenserad effekt.
+- **Breakets sista slag**: ekokast, tape stop eller tonhopp ner.
+- Aldrig i droppets första takt. Kick och bas glitchar sällan och får aldrig kross, tonhopp, baklänges eller svep.
+
+Effekterna: **REPEAT** (1/8, 1/16, 1/32 allt tätare), **BAK** (baklänges), **TAPE** (tape stop), **GATE** (trance-gate), **KROSS** (bitkross och lägre samplingsfrekvens), **TON** (repeat en oktav ner eller upp), **EKO** (kanalen kastas in i ett skallrande eko) och **SVEP** (resonant filtersvep som går allt snabbare).
+
+Varje kanal väljer i kanalvyn vilka effekter den får använda och hur mycket (**GLITCH**-ratten på kanalen). **GLITCH** under TRICK på CENTRAL styr alla kanaler.
 
 ## LOOPDELAREN
 

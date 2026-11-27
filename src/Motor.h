@@ -118,7 +118,7 @@ struct Installning
     float    kurva[8]  { 0.3f, 0.45f, 0.6f, 0.7f, 0.85f, 1.0f, 0.7f, 0.4f };
 
     // TRICK: vilka effekter som är på (bitar, se Trick) och hur ofta de händer
-    uint32_t trick      = 0x1FFFFu;
+    uint32_t trick      = 0x7FFFFu;
     float    trickMangd = 0.5f;
     uint32_t levande    = 0;    // vilka kanaler som har ljud (för TOMRUM), styr inte planen
 
@@ -142,9 +142,10 @@ enum Trick : uint32_t
 {
     T_FRYS = 1u << 0, T_HALVTID = 1u << 1, T_BAKBREAK = 1u << 2, T_VINYL = 1u << 3, T_RADIO = 1u << 4, T_EKO = 1u << 5,
     T_TOMRUM = 1u << 6, T_STAM = 1u << 7, T_GLAPP = 1u << 8, T_BYT = 1u << 9, T_SPOKE = 1u << 10, T_STOPP = 1u << 11,
-    T_FAS = 1u << 12, T_DUBKEDJA = 1u << 13, T_BAGE = 1u << 14, T_BASSVEP = 1u << 15, T_KICKPAUS = 1u << 16
+    T_FAS = 1u << 12, T_DUBKEDJA = 1u << 13, T_BAGE = 1u << 14, T_BASSVEP = 1u << 15, T_KICKPAUS = 1u << 16,
+    T_MULLER = 1u << 17, T_BASDYK = 1u << 18
 };
-inline constexpr int kAntalTrick = 17;
+inline constexpr int kAntalTrick = 19;
 
 // SKRIFTEN: "I16 G32 B U D K" -> delar. I=INTRO G=GROOVE L=LYFT B=BREAK U=BYGG (upp) D=DROP K=KLIMAX A=UTANDNING O=OUTRO
 inline int lasSkrift (const char* txt, int* ut, int max)
@@ -472,6 +473,9 @@ struct Atgard
     // LOOPDELAREN: nivå för delarna i en loop (kick, clap, sluten hihat, öppen hihat).
     // Det som blir över (bas, perc, synt i loopen) följer niva som vanligt.
     float    delar[4] { 1.0f, 1.0f, 1.0f, 1.0f };
+    // GLITCH (se Glitch.h)
+    float    kross   = 0.0f;    // bitkross + sampelreducering, 0..1
+    bool     svep    = false;   // snabbt filtersvep: filtret får följa motorn snabbare
     bool     dela    = false;   // sätts av processorn när kanalen är en LOOP och DELA är på
 };
 enum Del4 { D_KICK, D_CLAP, D_HH, D_OH, NUM_D4 };
@@ -967,6 +971,21 @@ inline Atgard atgardRa (const Plan& p, const Installning& in, const Overstyr& o,
     // dubkast i slutet av breaket
     if (s.typ == BREAK && slagKvar <= 1.0 && (roll == SYNT || roll == ATMO) && slump01 (s.h + 21) < dub)
         a.dub = 1.0f;
+
+    // ---- MULLER: första halvan av uppbyggnaden blir kicken dov och mullrande (lågpass + rum),
+    // som när basen i en lagerlokal hörs genom väggen, och klarnar sedan mot droppet
+    if ((in.trick & T_MULLER) && roll == KICK && s.typ == BYGG && slump01 (s.h + 131) < in.trickMangd * 1.4f)
+    {
+        const float m2 = std::fmax (0.0f, 1.0f - t * 1.6f);
+        a.lp = std::fmin (a.lp, 0.25f + 0.75f * (1.0f - m2));
+        a.rum = std::fmax (a.rum, 0.55f * m2);
+    }
+
+    // ---- BASDYK: basen lyfts ur med högpass sista slaget i en 8-taktsfras och smäller tillbaka på ettan
+    if ((in.trick & T_BASDYK) && roll == BAS && (s.typ == GROOVE || s.typ == KLIMAX || s.typ == DROP || s.typ == LYFT)
+        && (tid % 8) == 7 && slagKvar > slagPerTakt && kvarITakt <= 1.0
+        && slump01 (blanda (s.h, (uint32_t) (tid / 8), 0xBD)) < in.trickMangd * 1.2f)
+        a.hp = std::fmax (a.hp, (float) (0.55 * (1.0 - kvarITakt)) + 0.15f);
 
     // ---- TRYCK: hårdast i droppet och klimax, växer genom bygget, lättare i breaket
     {

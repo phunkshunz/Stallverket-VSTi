@@ -23,6 +23,8 @@ jobs:
           ./delare_test
           c++ -std=c++17 -O2 -Isrc tests/kassett_test.cpp -o kassett_test
           ./kassett_test
+          c++ -std=c++17 -O2 -Isrc tests/glitch_test.cpp -o glitch_test
+          ./glitch_test
 
       - name: Konfigurera
         run: >

@@ -3,6 +3,7 @@
 #include "Presets.h"
 #include "Licens.h"
 #include "Sprak.h"
+#include "Glitch.h"
 
 namespace
 {
@@ -19,9 +20,9 @@ const char* const kInstId[] = { "mall", "fro", "form", "energi", "variation", "b
                                 "t_frys", "t_halvtid", "t_bak", "t_vinyl", "t_radio", "t_eko", "t_tomrum",
                                 "t_stam", "t_glapp", "t_byt", "t_spoke", "t_stopp", "trickmangd",
                                 "t_fas", "t_dubkedja", "t_bage", "t_bassvep", "t_kickpaus",
-                                "mjuk", "tryck" };
-constexpr int kAntalInst = 81;
-constexpr int kIMjuk = 79, kITryck = 80;
+                                "mjuk", "tryck", "t_muller", "t_basdyk", "glitch" };
+constexpr int kAntalInst = 84;
+constexpr int kIMjuk = 79, kITryck = 80, kITrick3 = 81, kIGlitch = 83;
 constexpr int kITrick = 61, kITrickMangd = 73, kITrick2 = 74;
 constexpr int kIKurva = 31, kIEgen = 41;
 constexpr int kKurvTakter[] = { 128, 256, 512, 1024, 2048 };
@@ -116,6 +117,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout StallverketProcessor::skapaP
     const char* trick2Namn[] = { "Fasförskjutning", "Dubkedja", "Filterbåge", "Bassvep", "Kickpaus" };
     for (int i = 0; i < 5; ++i)   // FASFÖRSKJUTNING av från början: den kan låta som en flam
         p.push_back (std::make_unique<AudioParameterBool> (ParameterID { trick2Id[i], 1 }, String::fromUTF8 (trick2Namn[i]), i != 0));
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "t_muller", 1 }, String::fromUTF8 ("Muller"), true));
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "t_basdyk", 1 }, "Basdyk", true));
+    knapp ("glitch", "Glitch", 0.5f);
+    // GLITCH per kanal: vilka effekter kanalen tillåter och hur mycket
+    {
+        const char* gid[] = { "g_repeat", "g_bak", "g_tape", "g_gate", "g_kross", "g_ton", "g_eko", "g_svep" };
+        for (int i = 0; i < glitch::kAntal; ++i)
+            p.push_back (std::make_unique<AudioParameterBool> (ParameterID { gid[i], 1 }, String ("Glitch ") + String::fromUTF8 (glitch::namn (i)), true));
+        knapp ("g_mangd", "Glitch kanal", 0.5f);
+    }
     // knappar som går att mappa till en controller (reagerar när de slås på)
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "breaknu", 1 }, "Break nu", false));
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "byggnu", 1 },  "Bygg nu", false));
@@ -223,6 +234,7 @@ motor::Installning StallverketProcessor::fran (const float* v) const
     in.trick = 0;
     for (int i = 0; i < 12; ++i) if (v[kITrick + i] > 0.5f) in.trick |= 1u << i;
     for (int i = 0; i < 5; ++i)  if (v[kITrick2 + i] > 0.5f) in.trick |= 1u << (12 + i);
+    for (int i = 0; i < 2; ++i)  if (v[kITrick3 + i] > 0.5f) in.trick |= 1u << (17 + i);
     in.trickMangd = v[kITrickMangd];
 
     // SKRIFTEN: CENTRAL läser sin egen text, kanalerna läser den CENTRAL skickat
@@ -534,6 +546,10 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     fack.sattRoll (r);
     const bool dela = ! kassettNu && (r == motor::LOOP || r == motor::PERC) && las ("dela") > 0.5f;
     fack.sattDela (dela);
+    uint32_t glitchMask = 0;
+    { const char* gid[] = { "g_repeat", "g_bak", "g_tape", "g_gate", "g_kross", "g_ton", "g_eko", "g_svep" };
+      for (int i = 0; i < glitch::kAntal; ++i) if (las (gid[i]) > 0.5f) glitchMask |= 1u << i; }
+    const float glitchMangd = v[kIGlitch] * las ("g_mangd") * 2.0f;   // båda på 50 % = som tänkt
     int delVal[4];
     { const char* ids[] = { "d_kick", "d_clap", "d_hh", "d_oh" }; for (int i = 0; i < 4; ++i) delVal[i] = (int) las (ids[i]); }
 
@@ -546,6 +562,7 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
                   a.dela = dela;
                   for (int i = 0; i < 4; ++i) if (delVal[i] == 1) a.delar[i] = 1.0f; else if (delVal[i] == 2) a.delar[i] = 0.0f;
                   if (kassettNu) { a.niva = 1.0f; a.grind = 0xFFFF; }   // kassetten sköter nivåerna själv, spår för spår
+                  glitch::glitcha (a, plan, in, ov, k, kassettNu ? motor::PERC : r, s, slagPerTakt, glitchMask, glitchMangd);
                   if (pump > 0.0f)
                   {
                       // pumpar bara när kicken faktiskt spelar enligt motorn
