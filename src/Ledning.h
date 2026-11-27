@@ -54,6 +54,10 @@ struct Nav
     std::atomic<double>   recStart { 0.0 };
     std::atomic<double>   recStopp { 1.0e18 };
 
+    // GLITCH NU och FILL NU från CENTRAL: slaget då det ska hända (-1 = inget)
+    std::atomic<double>   glitchNu { -1.0 };
+    std::atomic<double>   fillNu { -1.0 };
+
     // SKRIFTEN från CENTRAL
     std::atomic<int>      skrift[32];
     std::atomic<int>      skriftN { 0 };

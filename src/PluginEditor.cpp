@@ -393,6 +393,9 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     centralVy = proc.arCentral();
     byggLayout();
     startTimerHz (30);
+    // Launch Control: den här maskinen tar styret när panelen öppnas och när man klickar i den
+    styret::Styret::instans().taStyret (juce::String ("STALLVERKET"));
+    addMouseListener (this, true);
 }
 
 StallverketEditor::~StallverketEditor() { setLookAndFeel (nullptr); }
@@ -493,6 +496,8 @@ void StallverketEditor::resized()
     kanalVal.setBounds (top.removeFromLeft (100).reduced (0, 2));
     top.removeFromLeft (6);
     rollVal.setBounds (top.removeFromLeft (96).reduced (0, 2));
+    top.removeFromLeft (10);
+    styretYta = top;
 
     r.removeFromTop (8);
 
@@ -654,6 +659,20 @@ void StallverketEditor::paint (juce::Graphics& g)
     g.setColour (muted);
     g.setFont (juce::FontOptions (8.5f));
     g.drawText (sprak::trU ("MASKINHALLEN · MOTTAGARE + MOTOR"), logoYta.withTrimmedTop (22), juce::Justification::centredLeft);
+
+    // Launch Control: lampa och senast vridna ratt
+    {
+        auto& st = styret::Styret::instans();
+        if (st.ansluten())
+        {
+            const bool har = st.harStyret (juce::String ("STALLVERKET"));
+            g.setColour (har ? sodium : muted);
+            g.setFont (juce::FontOptions (9.0f, juce::Font::bold));
+            juce::String t = har ? sprak::trU ("LAUNCH CONTROL") : sprak::trU ("LAUNCH CONTROL: KLICKA HÄR");
+            if (har && juce::Time::getMillisecondCounterHiRes() - st.senastTid() < 2500.0) t = st.senast();
+            g.drawText (t, styretYta, juce::Justification::centredLeft, true);
+        }
+    }
 
     if (centralVy)
     {
@@ -912,6 +931,8 @@ void StallverketEditor::ritaKanalvy (juce::Graphics& g, juce::Rectangle<int> yta
 
 void StallverketEditor::mouseDown (const juce::MouseEvent& e)
 {
+    styret::Styret::instans().taStyret (juce::String ("STALLVERKET"));
+    if (e.eventComponent != this) return;   // klick i en knapp: bara styret
     if (centralVy && vy == 1 && kurvYta.expanded (10).contains (e.getPosition())) { dragPunkt = -1; dragKurva (e.getPosition()); return; }
     if (logoYta.contains (e.getPosition()))
     {
@@ -945,6 +966,7 @@ void StallverketEditor::timerCallback()
     if (proc.presetNamn().isNotEmpty() && presetVal.getSelectedId() == 0)
         presetVal.setText (proc.presetNamn(), juce::dontSendNotification);
     repaint (centralVy ? tidYta : kanalYta);
+    repaint (styretYta);
 }
 
 void StallverketEditor::visaVy (int v)

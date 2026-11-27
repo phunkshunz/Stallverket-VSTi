@@ -64,6 +64,22 @@ Effekterna: **REPEAT** (1/8, 1/16, 1/32 allt tätare), **BAK** (baklänges), **T
 
 Varje kanal väljer i kanalvyn vilka effekter den får använda och hur mycket (**GLITCH**-ratten på kanalen). **GLITCH** under TRICK på CENTRAL styr alla kanaler.
 
+## LAUNCH CONTROL (STYRET)
+
+Koppla in din Novation Launch Control (eller Launch Control XL) med USB. Klart. Ingen MIDI-routing, ingen mappning. Den MASKINHALLEN-maskin du senast öppnade eller klickade i styrs (det står LAUNCH CONTROL uppe i panelen; står det KLICKA HÄR har en annan maskin styret).
+
+| | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| Övre rattar | ENERGI | MJUKHET | TRYCK | GLITCH | FILTER | STÖK | DUBKAST | VARIATION |
+| Nedre rattar | djup kanal 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+| Pads | BREAK NU | BYGG NU | DROP NU | HÅLL | SLÄPP | SLUMPA | GLITCH NU | FILL NU |
+
+XL: tredje rattraden och faders = BRYTDJUP, BYGGLÄNGD, ANDAS, ÖVERGÅNG, PUMP, PUMPTID, HUR OFTA, DJUP.
+
+- Rattarna plockar upp: en ratt gör inget förrän den passerar värdet som står i maskinen, så inget hoppar när du byter maskin. Panelen visar vilken ratt du vrider.
+- **GLITCH NU**: alla kanaler gör en glitch (bland de effekter kanalen tillåter) på nästa slag. **FILL NU**: trummorna rullar 1/16 och 1/32 på nästa slag.
+- Använd Launch Controls fabriksmall 1 (håll FACTORY och tryck pad 1).
+
 ## LOOPDELAREN
 
 Ligger det en trumloop på en kanal (ROLL = LOOP eller PERC, AUTO hittar trumloopar själv) delar STÄLLVERKET den i fyra delar: **KICK**, **CLAP**, **HH** (sluten hihat) och **OH** (öppen hihat). Motorn behandlar dem som om de låg på egna kanaler: kicken kan försvinna i breaket medan hihaten står kvar, delarna kommer in en i taget i introt och byter i turordning i groovet. Det som blir över (basgång, perc, synt i loopen) följer kanalen som vanligt.

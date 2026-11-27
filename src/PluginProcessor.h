@@ -9,6 +9,7 @@
 #include "Lyssna.h"
 #include "Kassett.h"
 #include "Referens.h"
+#include "Styret.h"
 
 // STÄLLVERKET: maskinen som alla kanaler går igenom.
 //
@@ -77,6 +78,9 @@ public:
     bool haller() const;
     void slumpaFro();
     void slumpaAllt();
+    void glitchNu();      // alla kanaler glitchar på nästa slag
+    void fillNu();        // trummorna rullar på nästa slag
+    void anmalStyret();   // Launch Control (se Styret.h)
 
     // ---- REC: varje kanal spelar in sin egen WAV på skrivbordet
     void vaxlaRec();
@@ -134,6 +138,7 @@ private:
     int kassettKitLaddat = -1;
     juce::String kassettMappLaddad;
     void laddaKassett();
+    bool styretAnmalt = false;
     void mixaHelaLaten (int64_t id);
     juce::String recText;
     juce::CriticalSection refLas;

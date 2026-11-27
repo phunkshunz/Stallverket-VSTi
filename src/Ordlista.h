@@ -246,5 +246,8 @@ inline constexpr Par kOrdlista[] =
     { "HELA LÅTEN SPARAD: ", "FULL TRACK SAVED: " },
     { " kanaler", " channels" },
     { "Spelar in varje kanal som en egen WAV på skrivbordet (mappen STÄLLVERKET inspelningar). Börjar och slutar på hel takt. När du stoppar läggs alla kanaler också ihop till 00 HELA LÅTEN.wav i samma mapp.", "Records every channel as its own WAV on the desktop (folder STÄLLVERKET inspelningar). Starts and stops on a full bar. When you stop, all channels are also mixed into 00 HELA LÅTEN.wav in the same folder." },
+    { "GLITCH NU", "GLITCH NOW" },
+    { "FILL NU", "FILL NOW" },
+    { "LAUNCH CONTROL: KLICKA HÄR", "LAUNCH CONTROL: CLICK HERE" },
 };
 } // namespace sprak

@@ -105,7 +105,7 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> centralAtt;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> kanalAtt, rollAtt, mallAtt, formAtt;
 
-    juce::Rectangle<int> logoYta, tidYta, kanalYta;
+    juce::Rectangle<int> logoYta, tidYta, kanalYta, styretYta;
     std::unique_ptr<juce::FileChooser> valjare;
     AboutOverlay om { juce::String::fromUTF8 ("STÄLLVERKET"), "mottagare + motor" };
     juce::Array<juce::File> egna;

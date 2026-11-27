@@ -133,6 +133,25 @@ int main (int argc, char** argv)
         std::printf ("referens: %s\n  mall nu: %s  skrift: %s\n", a.referensStatus().toRawUTF8(),
                      motor::kMallar[a.installning().mall].namn, a.skrift().toRawUTF8());
     }
+    // STYRET: låtsad Launch Control. Ratt 1 (CC 21) = ENERGI, med upplockning; pad 1 (not 9) = BREAK NU
+    {
+        auto& st = styret::Styret::instans();
+        a.anmalStyret();
+        st.taStyret (&a);
+        auto skicka = [&] (const juce::MidiMessage& mm) { st.testaMidi (mm); };
+        const float fore = a.state.getRawParameterValue ("energi")->load();
+        skicka (juce::MidiMessage::controllerEvent (9, 21, 0));      // långt ifrån: plockas inte upp
+        const float efter1 = a.state.getRawParameterValue ("energi")->load();
+        skicka (juce::MidiMessage::controllerEvent (9, 21, 127));    // passerar värdet: tar över
+        skicka (juce::MidiMessage::controllerEvent (9, 21, 100));
+        const float efter2 = a.state.getRawParameterValue ("energi")->load();
+        ledning::nav().ovTyp.store (-1);
+        skicka (juce::MidiMessage::noteOn (9, 9, (juce::uint8) 127));
+        std::printf ("styret: energi %.2f -> %.2f (ska stå still) -> %.2f (ska vara 0.79)  pad 1 -> %s  visar: %s\n", fore, efter1, efter2,
+                     ledning::nav().ovTyp.load() == motor::BREAK ? "BREAK NU" : "inget", st.senast().toRawUTF8());
+        skicka (juce::MidiMessage::noteOn (9, 27, (juce::uint8) 127));   // pad 7 = GLITCH NU
+        std::printf ("styret: GLITCH NU på slag %.0f\n", ledning::nav().glitchNu.load());
+    }
     a.taOver (motor::BYGG);
     const auto mid = a.exporteraMidi();
     std::printf ("MIDI-export: %s (%lld byte)\n", mid.getFileName().toRawUTF8(), (long long) mid.getSize());

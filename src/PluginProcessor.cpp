@@ -181,6 +181,7 @@ StallverketProcessor::StallverketProcessor()
 StallverketProcessor::~StallverketProcessor()
 {
     stopTimer();
+    styret::Styret::instans().avanmal (this);
     kassettTrad.removeAllJobs (true, 4000);
     stangRec();
     auto& n = ledning::nav();
@@ -565,6 +566,23 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
                   for (int i = 0; i < 4; ++i) if (delVal[i] == 1) a.delar[i] = 1.0f; else if (delVal[i] == 2) a.delar[i] = 0.0f;
                   if (kassettNu) { a.niva = 1.0f; a.grind = 0xFFFF; }   // kassetten sköter nivåerna själv, spår för spår
                   glitch::glitcha (a, plan, in, ov, k, kassettNu ? motor::PERC : r, s, slagPerTakt, glitchMask, glitchMangd);
+                  // GLITCH NU / FILL NU (från CENTRAL eller Launch Control): ett slag långt
+                  {
+                      const double gs = nav.glitchNu.load(), fs = nav.fillNu.load();
+                      const int rr = kassettNu ? motor::PERC : r;
+                      if (gs >= 0.0 && s >= gs && s < gs + 1.0 && glitchMask != 0)
+                      {
+                          uint32_t m2 = glitchMask;
+                          if (rr == motor::KICK || rr == motor::BAS) m2 &= (glitch::G_REPEAT | glitch::G_TAPE | glitch::G_GATE | glitch::G_EKO);
+                          if (m2 != 0) glitch::gest (a, glitch::valj (m2, motor::blanda ((uint32_t) gs, (uint32_t) k)), s - gs, 1.0, rr, false, (uint32_t) gs);
+                      }
+                      if (fs >= 0.0 && s >= fs && s < fs + 1.0)
+                      {
+                          if (rr == motor::HATS || rr == motor::PERC || rr == motor::CLAP || rr == motor::LOOP || rr == motor::RIDE)
+                              a.stutter = s - fs < 0.5 ? 1.0f : 0.5f;   // 1/16 och sedan 1/32
+                          else if (rr == motor::KICK && s - fs >= 0.75) a.niva = 0.0f;   // kicken andas sista sextondelen
+                      }
+                  }
                   if (pump > 0.0f)
                   {
                       // pumpar bara när kicken faktiskt spelar enligt motorn
@@ -656,6 +674,33 @@ void StallverketProcessor::vaxlaHall()
     n.hallTyp.store (s.typ);
     n.hallH.store (s.h);
     n.hall.store (true);
+}
+
+void StallverketProcessor::glitchNu() { const double s = slag.load(); ledning::nav().glitchNu.store (std::floor (s) + 1.0); }
+void StallverketProcessor::fillNu()   { const double s = slag.load(); ledning::nav().fillNu.store (std::floor (s) + 1.0); }
+
+// Launch Control: CENTRAL anmäler sig (en per projekt). Övre raden = låtens rattar,
+// nedre raden = hur mycket motorn styr kanal 1-8, XL rad 3 = resten. Padsen = knapparna.
+void StallverketProcessor::anmalStyret()
+{
+    styret::Upplagg u;
+    u.maskin = "STALLVERKET";
+    const char* ids[24] = { "energi", "mjuk", "tryck", "glitch", "filter", "stok", "dub", "variation",
+                            "djup1", "djup2", "djup3", "djup4", "djup5", "djup6", "djup7", "djup8",
+                            "brytdjup", "bygglangd", "andas", "overgang", "pump", "pumptid", "trickmangd", "djup" };
+    for (int i = 0; i < 24; ++i) u.rattar[(size_t) i] = ids[i];
+    const char* namn[8] = { "BREAK NU", "BYGG NU", "DROP NU", "HÅLL", "SLÄPP", "SLUMPA", "GLITCH NU", "FILL NU" };
+    for (int i = 0; i < 8; ++i) u.padNamn[(size_t) i] = sprak::trU (namn[i]);
+    u.pads[0] = [this] { taOver (motor::BREAK); };
+    u.pads[1] = [this] { taOver (motor::BYGG); };
+    u.pads[2] = [this] { taOver (motor::DROP); };
+    u.pads[3] = [this] { vaxlaHall(); };
+    u.pads[4] = [this] { slappTaOver(); if (haller()) vaxlaHall(); };
+    u.pads[5] = [this] { slumpaFro(); };
+    u.pads[6] = [this] { glitchNu(); };
+    u.pads[7] = [this] { fillNu(); };
+    u.padTand = [this] (int i) { return i == 3 && haller(); };
+    styret::Styret::instans().anmal (this, std::move (u));
 }
 
 void StallverketProcessor::slumpaFro()
@@ -961,6 +1006,10 @@ void StallverketProcessor::mixaHelaLaten (int64_t id)
 
 void StallverketProcessor::timerCallback()
 {
+    // Launch Control: bara CENTRAL tar emot
+    if (arCentral() && ! styretAnmalt) { anmalStyret(); styretAnmalt = true; }
+    else if (! arCentral() && styretAnmalt) { styret::Styret::instans().avanmal (this); styretAnmalt = false; }
+
     // referensläsaren är klar: lägg in kurvan och skriften (här, på meddelandetråden)
     {
         std::unique_ptr<referens::Resultat> res;
