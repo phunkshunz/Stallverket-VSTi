@@ -8,6 +8,7 @@
 // Gissningen byts bara om samma svar kommer två gånger i rad.
 
 #include <cmath>
+#include <cstdio>
 #include <algorithm>
 #include "Motor.h"
 
@@ -29,7 +30,7 @@ public:
 
     void nollstall()
     {
-        eL = eM = eH = 0.0; anslag = paSlag = baktakt = 0; startSlag = -1.0; ljudSampel = 0; sampel = 0;
+        eL = eM = eH = 0.0; anslag = paSlag = baktakt = hogAnslag = 0; startSlag = -1.0; ljudSampel = 0; sampel = 0;
     }
 
     // x = mono in, slag = position i slag för samplet
@@ -44,6 +45,14 @@ public:
         eL += (double) lag * lag; eM += (double) mitt * mitt; eH += (double) hog * hog;
         ++sampel;
 
+        // egen slagräknare för diskanten: hihats syns inte bredvid en stark kick annars
+        {
+            const float ah = std::abs (hog);
+            hSnabb += aSnabb * (ah - hSnabb);
+            hLangsam += aLangsam * (ah - hLangsam);
+            if (hVila > 0) --hVila;
+            else if (hSnabb > hLangsam * 2.0f && hSnabb > 0.004f) { ++hogAnslag; hVila = (int) (sr * 0.05f); }
+        }
         const float ax = std::abs (x);
         if (ax > 0.003f) ++ljudSampel;
         snabb += aSnabb * (ax - snabb);
@@ -74,14 +83,21 @@ private:
         const double fL = eL / tot, fM = eM / tot, fH = eH / tot;
         const double perSlag = anslag / std::max (1.0, senasteSlag - startSlag);
 #ifdef LYSSNA_DEBUG
-        std::printf ("fL %.2f fM %.2f fH %.2f perSlag %.2f paSlag %.2f bak %.2f\n", fL, fM, fH, perSlag, anslag ? (double) paSlag / anslag : 0.0, paSlag ? (double) baktakt / paSlag : 0.0);
+        std::printf ("hog/slag %.2f fL %.2f fM %.2f fH %.2f perSlag %.2f paSlag %.2f bak %.2f\n", hogPerSlag, fL, fM, fH, perSlag, anslag ? (double) paSlag / anslag : 0.0, paSlag ? (double) baktakt / paSlag : 0.0);
 #endif
         const double paSlagAndel = anslag > 0 ? (double) paSlag / anslag : 0.0;
+        const double hogPerSlag = hogAnslag / std::max (1.0, senasteSlag - startSlag);
         const double bakAndel = paSlag > 0 ? (double) baktakt / paSlag : 0.0;
 
         int r = motor::LOOP;
         if (fL > 0.55)
-            r = (perSlag > 0.6 && perSlag < 2.3 && paSlagAndel > 0.55) ? motor::KICK : motor::BAS;
+        {
+            // en ren kick: ungefär ett slag per taktslag och nästan ingen diskant.
+            // Täta slag med diskant (hihats) ovanpå = en trumloop, så LOOPDELAREN kan dela den.
+            if (hogPerSlag >= 1.5) r = motor::LOOP;
+            else if (perSlag > 0.6 && perSlag < 2.3 && paSlagAndel > 0.55) r = motor::KICK;
+            else r = motor::BAS;
+        }
         else if (perSlag >= 0.3 && perSlag <= 1.2 && paSlagAndel > 0.6 && bakAndel > 0.7)
             r = motor::CLAP;
         else if (fH > 0.5)
@@ -103,7 +119,8 @@ private:
     float sr = 48000.0f, aLag = 0, aHog = 0, aSnabb = 0, aLangsam = 0;
     float lag = 0, hogLp = 0, snabb = 0, langsam = 0;
     double eL = 0, eM = 0, eH = 0, startSlag = -1.0, senasteSlag = 0.0;
-    int anslag = 0, paSlag = 0, baktakt = 0, vila = 0;
+    int anslag = 0, paSlag = 0, baktakt = 0, vila = 0, hogAnslag = 0, hVila = 0;
+    float hSnabb = 0, hLangsam = 0;
     int64_t ljudSampel = 0, sampel = 0;
     int gissning = -1, kandidat = -1;
 };

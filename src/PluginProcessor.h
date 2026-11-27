@@ -62,6 +62,10 @@ public:
     float gainNu() const { return gainVisning.load(); }
     float lpNu() const { return lpVisning.load(); }
     float hpNu() const { return hpVisning.load(); }
+    // LOOPDELAREN: hur mycket varje del hörs och om den slår just nu (för panelen)
+    bool  delarPa() const { const int r = roll(); return (r == motor::LOOP || r == motor::PERC) && las ("dela") > 0.5f; }
+    float delAktivitet (int i) const { return fack.delarna().aktivitet (i); }
+    float delNiva (int i) const { return fack.delarna().nivaNu (i); }
     static int64_t nuMs();
 
     // ---- knapparna på CENTRAL
@@ -100,9 +104,10 @@ public:
     void sattSkrift (const juce::String& txt);
     juce::String skrift() const { return skriftText; }
 
+    float las (const char* id) const;
+
 private:
     void satt (const juce::String& id, float verkligt);
-    float las (const char* id) const;
     void lasInstallning (float* ut) const;
     motor::Installning fran (const float* v) const;
 

@@ -468,7 +468,14 @@ struct Atgard
     float    dubFb   = 0.0f;    // DUBKEDJA: ekots återkoppling (0 = vanlig)
     bool     ekoKlipp = false;  // klipper ekot tvärt (droppet efter en dubkedja)
     float    tryck   = 0.0f;    // TRYCK: mättnad och täthet, 0..1 (motorn höjer i droppet, sänker i breaket)
+
+    // LOOPDELAREN: nivå för delarna i en loop (kick, clap, sluten hihat, öppen hihat).
+    // Det som blir över (bas, perc, synt i loopen) följer niva som vanligt.
+    float    delar[4] { 1.0f, 1.0f, 1.0f, 1.0f };
+    bool     dela    = false;   // sätts av processorn när kanalen är en LOOP och DELA är på
 };
+enum Del4 { D_KICK, D_CLAP, D_HH, D_OH, NUM_D4 };
+inline const char* del4Namn (int i) { static const char* n[] = { "KICK", "CLAP", "HH", "OH" }; return (i >= 0 && i < 4) ? n[i] : "?"; }
 
 inline uint16_t grindMonster (uint32_t h, float tathet)
 {
@@ -987,8 +994,8 @@ inline Atgard atgardRa (const Plan& p, const Installning& in, const Overstyr& o,
 //  - på väg in: en filtrerad försmak som växer, och fullt på ettan (kicken kommer
 //    rakt in på ettan, det är så det ska låta)
 // In i DROP och KLIMAX glider ingenting: där ska det smälla.
-inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
-                      int kanal, int roll, double slag, int slagPerTakt = 4)
+inline Atgard mjukgor (const Plan& p, const Installning& in, const Overstyr& o,
+                       int kanal, int roll, double slag, int slagPerTakt = 4)
 {
     Atgard a = atgardRa (p, in, o, kanal, roll, slag, slagPerTakt);
     if (in.mjuk <= 0.001f || roll < 0 || roll >= NUM_ROLL) return a;
@@ -1058,6 +1065,29 @@ inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
     {
         if (std::abs (mal.lp - a.lp) > 0.02f) a.lp = lerp (a.lp, mal.lp, sx);
         if (std::abs (mal.hp - a.hp) > 0.02f) a.hp = lerp (a.hp, mal.hp, sx);
+    }
+    return a;
+}
+
+// Den färdiga åtgärden. En LOOP får dessutom nivåer för sina delar: motorn
+// behandlar loopens kick, clap och hihats som om de låg på egna kanaler
+// (egna intron, breaks och byten), så du kan ta bort och lägga till dem
+// fast allt ligger i samma loop.
+inline Atgard atgard (const Plan& p, const Installning& in, const Overstyr& o,
+                      int kanal, int roll, double slag, int slagPerTakt = 4)
+{
+    Atgard a = mjukgor (p, in, o, kanal, roll, slag, slagPerTakt);
+    if (roll == LOOP || roll == PERC)
+    {
+        static const int virt[4] = { KICK, CLAP, HATS, RIDE };
+        for (int i = 0; i < 4; ++i)
+        {
+            const Atgard v = mjukgor (p, in, o, kanal * 5 + 41 + i, virt[i], slag, slagPerTakt);
+            float niva = v.niva;
+            if (i == D_KICK) niva *= 1.0f - 0.9f * std::fmin (1.0f, v.hp * 1.6f);    // högpass på kicken = basen lyfts ur
+            if (i == D_HH || i == D_OH) niva *= 0.3f + 0.7f * v.lp;               // stängda hats = tystare hats
+            a.delar[i] = std::clamp (niva, 0.0f, 1.0f);
+        }
     }
     return a;
 }

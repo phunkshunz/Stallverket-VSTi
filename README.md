@@ -27,6 +27,8 @@ CENTRAL behandlar också ljudet på sin egen kanal, så den kan ligga på t.ex. 
 - **FORM**: EVIG (bygger vidare i timmar utan att upprepa sig) eller 64/128/192/256 takter som börjar om efter OUTRO.
 - **ENERGI** (färre breaks, fler klimax) · **VARIATION** (hur ofta element kommer och går) · **BRYTDJUP** (hur mycket som försvinner i breaken) · **BYGGLÄNGD** · **STÖK** (stutter, trumrullar, fills) · **FILTER** (hur mycket filtren rör sig) · **ANDAS** (tystnad sista slaget innan droppet) · **DUBKAST** (eko som ringer vidare) · **DJUP** (hur mycket motorn styr totalt).
 - **ÖVERGÅNG**: övergångseffekter utan brus. Tape stop sista slaget innan breaket, stutter som stiger i tonhöjd i slutet av uppbyggnaden, kickrulle ner till 1/32 och ett rum som sväller in i droppet.
+- **MJUKHET**: hur mjukt motorn byter. Högt värde: element glider in och ut med filter under upp till två takter (kick och bas lyfts ur med högpass, synt och atmo stängs med lågpass, nya element kommer som en filtrerad försmak och fullt på ettan). Bara en grupp kanaler byter per 8-taktsfras, och uppbyggnader, breaks och lyft blir aldrig kortare än 8 takter. In i droppet glider ingenting: där smäller det. 0 = tvära byten som förr.
+- **TRYCK**: mättnad som gör varje kanal tätare och hårdare utan att den blir högre (nivån räknas tillbaka). Kick och bas tål mest, hats och atmo minst. Motorn trycker hårdast i droppet och klimax, minst i breaket.
 - **PUMP** + **PUMPTID**: kicken pumpar bas, synt, atmo och de andra kanalerna, utan någon sidechain-routing. Pumpen följer motorn: tystnar kicken i breaket, slutar det pumpa.
 - **MIDI UT**: CENTRAL skickar MIDI på kanal 16 när en ny del börjar. Not C1 = INTRO, C#1 = GROOVE, D1 = LYFT, D#1 = BREAK, E1 = BYGG, F1 = DROP, F#1 = KLIMAX, G1 = UTANDNING, G#1 = OUTRO. CC 20 = delens nummer, CC 21 = energi. I Bitwig: lägg en *Note Receiver* på ett annat spår och välj STÄLLVERKET som källa, så kan du byta scener eller mönster i BETONG/KOLV när låten byter del.
 - **Controller**: BREAK NU, BYGG NU, DROP NU, HÅLL och SLÄPP finns som parametrar. Mappa dem till knappar på din controller i Bitwig.
@@ -45,6 +47,15 @@ CENTRAL behandlar också ljudet på sin egen kanal, så den kan ligga på t.ex. 
 - **KURVA**: rita energin över hela setet med åtta punkter (128 till 2048 takter, 512 takter är ungefär en timme i 130 BPM). Tänd **KURVA PÅ**, så ersätter kurvan ENERGI-ratten: lågt = fler breaks och färre element, högt = fler klimax.
 - **MALL**: bygg en egen mall. Längd per del, chanser (lyft, break, direkt bygg, direkt drop, klimax, utandning) och karaktär (hårda klipp, stök, dubkast, filter, atmo först). Välj **EGEN** i mallmenyn för att höra den. **KOPIERA MALL** tar mallen som spelar som startpunkt. Egna mallar sparas som `.stallmall` i `Dokument/Phunkshunz/STALLVERKET/Mallar`.
 - **SPARA MIDI**: sparar låten som MIDI-fil i `Dokument/Phunkshunz/STALLVERKET/Export` och visar den i Finder. Ett spår med delarna (markörer + noter C1 och uppåt) och ett spår per kanal med en not när kanalen spelar, plus nivå (CC 11), lågpass (CC 74) och högpass (CC 75). Dra in filen i Bitwig.
+
+## LOOPDELAREN
+
+Ligger det en trumloop på en kanal (ROLL = LOOP eller PERC, AUTO hittar trumloopar själv) delar STÄLLVERKET den i fyra delar: **KICK**, **CLAP**, **HH** (sluten hihat) och **OH** (öppen hihat). Motorn behandlar dem som om de låg på egna kanaler: kicken kan försvinna i breaket medan hihaten står kvar, delarna kommer in en i taget i introt och byter i turordning i groovet. Det som blir över (basgång, perc, synt i loopen) följer kanalen som vanligt.
+
+- Ingen AI, inget som drar processor: loopen delas i fyra band som alltid summerar till originalet, och varje slag hörs 30 ms innan det spelas så grindarna öppnar precis före slaget.
+- Delaren lär sig loopen: vilka steg som är öppen och sluten hihat, och hur lång kicken är. Svagare basslag räknas som basgång och får vara kvar.
+- **DELA LOOP** i kanalvyn slår på och av. **KICK / CLAP / HH / OH**: klicka för AUTO (motorn bestämmer), PÅ (alltid kvar) eller AV (alltid borta). Lampan lyser när delen slår.
+- Med alla delar på är ljudet exakt som originalet.
 
 ## REC
 
@@ -80,4 +91,5 @@ Filformatet är vanlig XML:
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 c++ -std=c++17 -Isrc tests/motor_test.cpp -o motor_test && ./motor_test
+c++ -std=c++17 -O2 -Isrc tests/delare_test.cpp -o delare_test && ./delare_test
 ```

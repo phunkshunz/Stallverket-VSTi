@@ -193,5 +193,10 @@ inline constexpr Par kOrdlista[] =
     { "TRYCK", "PRESSURE" },
     { "Hur mjukt motorn byter. Högt: element glider in och ut med filter under upp till två takter, en sak ändras i taget och uppbyggnader blir aldrig för korta. 0 = tvära byten som förr.", "How smoothly the engine changes. High: elements glide in and out with filters over up to two bars, one thing changes at a time and build-ups are never too short. 0 = hard switches like before." },
     { "Mättnad som gör varje kanal tätare och hårdare utan att den blir högre. Motorn trycker mest i droppet och minst i breaket.", "Saturation that makes every channel denser and harder without making it louder. The engine pushes hardest in the drop and least in the break." },
+    { "DELA LOOP", "SPLIT LOOP" },
+    { "DELAREN GÄLLER ROLL LOOP OCH PERC", "THE SPLITTER WORKS ON ROLE LOOP AND PERC" },
+    { "LOOPDELAREN: delar loopen i kick, clap, sluten och öppen hihat. Motorn tar bort och lägger till dem var för sig, som om de låg på egna kanaler. Gäller kanaler med ROLL = LOOP eller PERC.", "LOOP SPLITTER: splits the loop into kick, clap, closed and open hi-hat. The engine removes and adds them one by one, as if they were on their own channels. Works on channels with ROLE = LOOP or PERC." },
+    { "PÅ", "ON" },
+    { "AV", "OFF" },
 };
 } // namespace sprak

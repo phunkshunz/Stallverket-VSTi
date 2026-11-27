@@ -122,6 +122,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout StallverketProcessor::skapaP
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "hall", 1 },    String::fromUTF8 ("Håll"), false));
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "slapp", 1 },   String::fromUTF8 ("Släpp"), false));
     p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "midiut", 1 },  "MIDI ut", true));
+    // LOOPDELAREN (per kanal): delar en loop i kick, clap, sluten och öppen hihat
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "dela", 1 }, "Dela loop", true));
+    for (auto* id : { "d_kick", "d_clap", "d_hh", "d_oh" })
+        p.push_back (std::make_unique<AudioParameterChoice> (ParameterID { id, 1 }, String ("Loop ") + String (id + 2).toUpperCase(),
+                                                              StringArray { "AUTO", String::fromUTF8 ("PÅ"), "AV" }, 0));
     for (int i = 1; i <= ledning::kKanaler; ++i)
     {
         const auto id = "djup" + String (i);
@@ -494,6 +499,10 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     const float kickDjup = kickKanal >= 0 ? juce::jlimit (0.0f, 1.0f, v[11] * v[12 + kickKanal]) : 0.0f;
 
     fack.sattRoll (r);
+    const bool dela = (r == motor::LOOP || r == motor::PERC) && las ("dela") > 0.5f;
+    fack.sattDela (dela);
+    int delVal[4];
+    { const char* ids[] = { "d_kick", "d_clap", "d_hh", "d_oh" }; for (int i = 0; i < 4; ++i) delVal[i] = (int) las (ids[i]); }
 
     // ljudet som hörs är 30 ms gammalt (framåtblicken), så motorn räknar på ljudets tid
     const double ljudTid = ppq - fack.latens() * slagPerSampel;
@@ -501,6 +510,8 @@ void StallverketProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
               [&] (double s)
               {
                   auto a = motor::atgard (plan, in, ov, k, r, s, slagPerTakt);
+                  a.dela = dela;
+                  for (int i = 0; i < 4; ++i) if (delVal[i] == 1) a.delar[i] = 1.0f; else if (delVal[i] == 2) a.delar[i] = 0.0f;
                   if (pump > 0.0f)
                   {
                       // pumpar bara när kicken faktiskt spelar enligt motorn

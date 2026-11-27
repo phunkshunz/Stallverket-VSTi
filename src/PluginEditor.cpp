@@ -5,7 +5,7 @@ namespace
 {
 constexpr int kCentralB = 920, kCentralH = 640;
 constexpr int kTidH = 380;
-constexpr int kKanalB = 540, kKanalH = 262;
+constexpr int kKanalB = 540, kKanalH = 296;
 
 juce::Colour delFarg (int d)
 {
@@ -161,6 +161,34 @@ StallverketEditor::StallverketEditor (StallverketProcessor& p)
     fyllMallar();
     licensRuta.onUpplast = [this] { repaint(); };
 
+    // ---- LOOPDELAREN
+    delaKnapp.setButtonText (utf8 ("DELA LOOP"));
+    delaKnapp.setClickingTogglesState (true);
+    delaAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (proc.state, "dela", delaKnapp);
+    delaKnapp.setTooltip (utf8 ("LOOPDELAREN: delar loopen i kick, clap, sluten och öppen hihat. Motorn tar bort och lägger till dem var för sig, som om de låg på egna kanaler. Gäller kanaler med ROLL = LOOP eller PERC."));
+    {
+        const char* ids[] = { "d_kick", "d_clap", "d_hh", "d_oh" };
+        for (int i = 0; i < 4; ++i)
+        {
+            const juce::String id = ids[i];
+            delVal[i].onClick = [this, id]
+            {
+                if (auto* prm = proc.state.getParameter (id))
+                {
+                    const int nu = (int) proc.las (id.toRawUTF8());
+                    prm->beginChangeGesture();
+                    prm->setValueNotifyingHost (prm->convertTo0to1 ((float) ((nu + 1) % 3)));
+                    prm->endChangeGesture();
+                }
+                uppdateraDelar();
+            };
+            delVal[i].setTooltip (juce::String (motor::del4Namn (i)) + utf8 (" i loopen: AUTO = motorn bestämmer, PÅ = alltid kvar, AV = alltid borta. Klicka för att byta."));
+            addChildComponent (delVal[i]);
+        }
+        uppdateraDelar();
+    }
+    addChildComponent (delaKnapp);
+
     // ---- trick
     const char* trickId[] = { "t_frys", "t_halvtid", "t_bak", "t_vinyl", "t_radio", "t_eko", "t_tomrum",
                               "t_stam", "t_glapp", "t_byt", "t_spoke", "t_stopp",
@@ -314,6 +342,8 @@ void StallverketEditor::byggLayout()
                                                              &fro, &energi, &variation, &brytdjup, &bygglangd, &stok, &filter, &andas, &dub, &djup, &pump, &pumptid, &overgang, &mjuk, &tryck, &midiKnapp })
         c->setVisible (centralVy);
     for (auto* c : std::initializer_list<juce::Component*> { &centralKnapp, &kanalVal, &rollVal, &sprakKnapp }) c->setVisible (true);
+    delaKnapp.setVisible (! centralVy);
+    for (auto& c : delVal) c.setVisible (! centralVy);
     for (auto* c : { &flikLat, &flikKurva, &flikMall, &flikTrick, &exportKnapp }) c->setVisible (centralVy);
     visaVy (vy);
 
@@ -373,6 +403,12 @@ void StallverketEditor::resized()
     {
         kanalYta = r;
         tidYta = {};
+        auto rad = r.reduced (12, 10).removeFromBottom (24);
+        delaKnapp.setBounds (rad.removeFromLeft (96));
+        rad.removeFromLeft (8);
+        delarYta = rad;
+        const int w = rad.getWidth() / 4;
+        for (int i = 0; i < 4; ++i) delVal[i].setBounds (rad.removeFromLeft (w).withTrimmedLeft (16).reduced (2, 1));
         return;
     }
 
@@ -631,7 +667,27 @@ void StallverketEditor::ritaKanalvy (juce::Graphics& g, juce::Rectangle<int> yta
 {
     using namespace ArmColours;
     drawPanel (g, yta, "", {});
-    auto r = yta.reduced (12, 10);
+    auto r = yta.reduced (12, 10).withTrimmedBottom (32);
+
+    // LOOPDELAREN: lampa per del (lyser när delen slår, mörk när motorn tagit bort den)
+    {
+        const bool pa = proc.delarPa();
+        const int w = delarYta.getWidth() / 4;
+        for (int i = 0; i < 4; ++i)
+        {
+            auto c = delarYta.withX (delarYta.getX() + i * w).withWidth (16);
+            const float niva = pa ? proc.delNiva (i) : 1.0f, slag = pa ? proc.delAktivitet (i) : 0.0f;
+            auto lampa = juce::Rectangle<float> (8, 8).withCentre ({ (float) c.getX() + 6.0f, (float) c.getCentreY() });
+            g.setColour (pa ? (niva < 0.1f ? line2 : sodium.withAlpha (0.25f + 0.75f * slag * niva)) : line2);
+            g.fillEllipse (lampa);
+        }
+        if (! pa)
+        {
+            g.setColour (muted);
+            g.setFont (juce::FontOptions (9.0f));
+            g.drawText (sprak::trU ("DELAREN GÄLLER ROLL LOOP OCH PERC"), r.withTop (r.getBottom() + 2).withHeight (10), juce::Justification::centredLeft);
+        }
+    }
 
     const bool lever = proc.centralLever();
     const bool arC = proc.arCentral();
@@ -727,6 +783,7 @@ void StallverketEditor::timerCallback()
 {
     if (proc.arCentral() != centralVy) byggLayout();
     hallKnapp.setToggleState (proc.haller(), juce::dontSendNotification);
+    if (! centralVy) uppdateraDelar();
     {
         const bool rec = proc.spelarIn();
         recKnapp.setToggleState (rec, juce::dontSendNotification);
@@ -763,6 +820,19 @@ void StallverketEditor::visaVy (int v)
     skriftFalt.setVisible (c && vy == 3);
     (vy == 0 ? flikLat : vy == 1 ? flikKurva : vy == 2 ? flikMall : flikTrick).setToggleState (true, juce::dontSendNotification);
     repaint();
+}
+
+void StallverketEditor::uppdateraDelar()
+{
+    const char* ids[] = { "d_kick", "d_clap", "d_hh", "d_oh" };
+    for (int i = 0; i < 4; ++i)
+    {
+        const int v = juce::jlimit (0, 2, (int) proc.las (ids[i]));
+        const juce::String lage = v == 0 ? juce::String ("AUTO") : sprak::trU (v == 1 ? "PÅ" : "AV");
+        const juce::String t = juce::String (motor::del4Namn (i)) + " " + lage;
+        if (delVal[i].getButtonText() != t) delVal[i].setButtonText (t);
+        delVal[i].setColour (juce::TextButton::textColourOffId, v == 2 ? ArmColours::muted : (v == 1 ? ArmColours::sodium : ArmColours::text));
+    }
 }
 
 void StallverketEditor::fyllMallar()

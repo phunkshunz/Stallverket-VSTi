@@ -19,6 +19,8 @@ jobs:
         run: |
           c++ -std=c++17 -O2 -Isrc tests/motor_test.cpp -o motor_test
           ./motor_test
+          c++ -std=c++17 -O2 -Isrc tests/delare_test.cpp -o delare_test
+          ./delare_test
 
       - name: Konfigurera
         run: >

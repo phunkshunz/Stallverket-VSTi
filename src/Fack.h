@@ -13,6 +13,7 @@
 #include <vector>
 #include <algorithm>
 #include "Motor.h"
+#include "Delare.h"
 
 namespace fack
 {
@@ -105,6 +106,7 @@ public:
         fram.assign ((size_t) (framLen + 1) * 2, 0.0f);
         framAnslag.assign ((size_t) (framLen + 1), 0);
         framPos = 0;
+        delaren.forbered (sr, framLen);
         detSnabb = detLangsam = 0.0f; detVila = 0;
         sparrOppna = sparrStang = false;
         eko.assign ((size_t) (sr * 4.0f) * 2, 0.0f);
@@ -162,9 +164,20 @@ public:
                 else if (detSnabb > detLangsam * 2.0f && detSnabb > 0.01f) { anslag = 1; detVila = (int) (sr * 0.04f); }
                 fram[(size_t) framPos * 2] = raL; fram[(size_t) framPos * 2 + 1] = raR;
                 framAnslag[(size_t) framPos] = anslag;
+                if (delaAktiv) delaren.lyssna (0.5f * (raL + raR), framPos, slag + (double) framLen * slagPerSampel);
             }
             int lasPos = framPos + 1; if (lasPos > framLen) lasPos = 0;      // äldsta = det som spelas nu
-            const float inL = fram[(size_t) lasPos * 2], inR = fram[(size_t) lasPos * 2 + 1];
+            float inL = fram[(size_t) lasPos * 2], inR = fram[(size_t) lasPos * 2 + 1];
+            // ---- LOOPDELAREN: kick, clap och hihats i loopen tas bort eller läggs till var för sig
+            // Resten (det som inte är kick, clap eller hihat) följer kanalens nivå, och då
+            // står huvudnivån still på 1 så att delarna kan låta fast resten är borta.
+            const bool delaNu = delaAktiv && spelar && djup > 0.5f && a.dela;
+            if (delaAktiv)
+            {
+                const int stegD = (int) std::fmod (std::floor (slag * 4.0), 16.0);
+                const float rest = a.niva * (((a.grind >> stegD) & 1u) ? 1.0f : 0.0f);
+                delaren.dela (inL, inR, lasPos, slag, a.delar, rest, delaNu);
+            }
             const bool anslagNu = framAnslag[(size_t) lasPos] != 0;
             if (++framPos > framLen) framPos = 0;
 
@@ -172,7 +185,7 @@ public:
             const float d = spelar ? djup : 0.0f;
             const int steg = (int) std::fmod (std::floor (slag * 4.0), 16.0);
             const bool grindPa = ((a.grind >> steg) & 1u) != 0;
-            float nivaNu = a.niva * (grindPa ? 1.0f : 0.0f);
+            float nivaNu = delaNu ? 1.0f : a.niva * (grindPa ? 1.0f : 0.0f);
 
             // ---- byt på slaget i ljudet, inte mitt i det: ligger ett anslag strax före en
             // ändring på rutnätet öppnar/stänger vi vid anslaget i stället, så slaget kommer med helt
@@ -182,11 +195,12 @@ public:
                 const float nivaFram = aFram.niva * (((aFram.grind >> stegF) & 1u) ? 1.0f : 0.0f);
                 if (sparrOppna && nivaNu > 0.5f) sparrOppna = false;
                 if (sparrStang && nivaNu < 0.3f) sparrStang = false;
-                if (anslagNu && spelar)
+                if (anslagNu && spelar && ! delaNu)
                 {
                     if (nivaNu < 0.3f && nivaFram > 0.5f) { sparrOppna = true; sparrStang = false; }
                     else if (nivaNu > 0.5f && nivaFram < 0.3f) { sparrStang = true; sparrOppna = false; }
                 }
+                if (delaNu) sparrOppna = sparrStang = false;
                 if (sparrOppna) nivaNu = std::max (nivaNu, nivaFram);
                 if (sparrStang) nivaNu = std::min (nivaNu, nivaFram);
             }
@@ -468,6 +482,10 @@ public:
         tryckRoll = (roll >= 0 && roll < motor::NUM_ROLL) ? t[roll] : 0.0f;
     }
 
+    // LOOPDELAREN körs bara på kanaler där den behövs (LOOP och PERC med DELA på)
+    void sattDela (bool pa) { delaAktiv = pa; }
+    const delare::Delare& delarna() const { return delaren; }
+
     int latens() const { return framLen; }      // rapporteras till DAW:en, som skjuter allt annat lika mycket
     float nivaMatare() const { return topp; }
     float aktuellGain() const { return gain; }
@@ -500,6 +518,8 @@ private:
     int ankare = 0, bakAnkare = 0, bakN = 0;
     unsigned raknare = 0;
     float topp = 0;
+    delare::Delare delaren;
+    bool delaAktiv = false;
     float tryckRoll = 0.5f, tryckN = 0.0f, rmsIn = 0.0f, rmsUt = 0.0f, kompN = 1.0f, rmsK = 0.0001f;
 };
 } // namespace fack

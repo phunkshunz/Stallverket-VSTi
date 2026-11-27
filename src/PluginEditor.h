@@ -80,6 +80,12 @@ private:
     juce::Array<juce::File> mallFiler;
     juce::Rectangle<int> mallRubYta[3];
     licens::Ruta licensRuta;
+    // LOOPDELAREN i kanalvyn
+    juce::TextButton delaKnapp;
+    juce::TextButton delVal[4];     // bläddrar AUTO -> PÅ -> AV
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> delaAtt;
+    void uppdateraDelar();
+    juce::Rectangle<int> delarYta;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> centralAtt;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> kanalAtt, rollAtt, mallAtt, formAtt;
