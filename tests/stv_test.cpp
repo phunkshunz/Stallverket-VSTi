@@ -24,14 +24,27 @@ int main (int argc, char** argv)
     std::printf ("a central=%d kanal=%d | b central=%d kanal=%d | c kanal=%d\n", a.arCentral(), a.kanal(), b.arCentral(), b.kanal(), c.kanal());
     // b står kvar på AUTO och får en trumloop (kick + hats)
     c.state.getParameter ("roll")->setValueNotifyingHost (c.state.getParameter ("roll")->convertTo0to1 (5));
-    a.laddaFabrik (41);  // ett preset med ny mall
+    int prv = 41;   // "Mörkrets tryck" om det finns (mall MÖRKER), annars ett äldre preset
+    for (int i = 0; i < a.antalFabrik(); ++i) if (a.getProgramName (i) == juce::String::fromUTF8 ("Mörkrets tryck")) prv = i;
+    a.laddaFabrik (prv);
     // d: en tom kanal med BETONG-KASSETT
     StallverketProcessor d;
     d.setPlayHead (&ph); d.prepareToPlay (48000, 512);
     d.state.getParameter ("kassett")->setValueNotifyingHost (1.0f);
+    d.state.getParameter ("k_kit")->setValueNotifyingHost (d.state.getParameter ("k_kit")->convertTo0to1 (32));       // Varvet
+    d.state.getParameter ("k_monster")->setValueNotifyingHost (d.state.getParameter ("k_monster")->convertTo0to1 (2)); // Lagerlokal
     d.state.getParameter ("roll")->setValueNotifyingHost (d.state.getParameter ("roll")->convertTo0to1 (7));
     for (int i = 0; i < 40; ++i) juce::MessageManager::getInstance()->runDispatchLoopUntil (20);   // ladda ljuden
     std::printf ("kassett: %s\n", d.kassettStatus().toRawUTF8());
+    // ljudprov: kassetten genom hela motorn, sparas som WAV
+    std::unique_ptr<juce::AudioFormatWriter> prov;
+    {
+        juce::File pf ("/tmp/stallverket_ljudprov.wav"); pf.deleteFile();
+        std::unique_ptr<juce::OutputStream> os (pf.createOutputStream());
+        juce::WavAudioFormat wf;
+        prov.reset (wf.createWriterFor (os.get(), 48000.0, 2, 24, {}, 0));
+        if (prov != nullptr) os.release();
+    }
     double kassettMax = 0, kassettE = 0;
     a.vaxlaRec();        // REC från start
     juce::AudioBuffer<float> buf (2, 512);
@@ -61,6 +74,7 @@ int main (int argc, char** argv)
         {
             buf.clear(); m.clear();
             d.processBlock (buf, m);
+            if (prov != nullptr) prov->writeFromAudioSampleBuffer (buf, 0, 512);
             for (int i = 0; i < 512; ++i) { const float v = buf.getSample (0, i); if (! std::isfinite (v)) ++nan; kassettMax = std::max (kassettMax, (double) std::abs (v)); kassettE += v * v; }
         }
         ph.ppq += 512.0 * 130.0 / 60.0 / 48000.0;
@@ -69,6 +83,7 @@ int main (int argc, char** argv)
         if (ph.ppq >= 16.0) ph.ppq -= 16.0;   // DAW:en loopar 4 takter
     }
     std::printf ("takt efter 3 min med 4-taktsloop: %d (ska vara ~97)  roll c: %d  roll b (AUTO, trumloop): %s  roll a (AUTO, brus): %s\n", (int) (a.slagNu() / 4), c.roll(), motor::rollNamn (b.roll()), motor::rollNamn (a.roll()));
+    prov.reset();
     std::printf ("kassett: max %.3f  rms %.4f\n", kassettMax, std::sqrt (kassettE / (48000.0 * 180)));
     std::printf ("NaN: %lld  max: %.3f  följer b mall=%d  MIDI-händelser: %lld\n", (long long) nan, maxv, b.installning().mall, (long long) midiN);
     juce::MessageManager::getInstance()->runDispatchLoopUntil (300);
